@@ -127,4 +127,9 @@ class Course extends Model
     {
         return 'slug';
     }
+
+    public function ratings(): HasMany 
+    {
+        return $this->hasMany(Review::class);
+    }
 }

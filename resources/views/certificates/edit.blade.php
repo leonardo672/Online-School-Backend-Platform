@@ -391,10 +391,10 @@
                                     <button type="submit" class="btn btn-update-certificate me-2">
                                         <i class="fas fa-save"></i> Update Certificate
                                     </button>
-                                    <button type="button" class="btn btn-success" 
+                                    <!-- <button type="button" class="btn btn-success" 
                                             onclick="saveAsNewVersion()">
                                         <i class="fas fa-copy"></i> Save as New Version
-                                    </button>
+                                    </button> -->
                                 </div>
                             </div>
                         </form>
@@ -1567,18 +1567,18 @@
         }
     }
 
-    function saveAsNewVersion() {
-        if (confirm('Save as a new version? This will create a copy with your changes.')) {
-            // Clone the form, change method to POST, and submit to a different endpoint
-            const form = document.getElementById('certificateForm');
-            const newForm = form.cloneNode(true);
-            newForm.method = 'POST';
-            newForm.action = '{{ url("/certificates/" . $certificate->id . "/version") }}';
-            newForm.style.display = 'none';
-            document.body.appendChild(newForm);
-            newForm.submit();
-        }
-    }
+    // function saveAsNewVersion() {
+    //     if (confirm('Save as a new version? This will create a copy with your changes.')) {
+    //         // Clone the form, change method to POST, and submit to a different endpoint
+    //         const form = document.getElementById('certificateForm');
+    //         const newForm = form.cloneNode(true);
+    //         newForm.method = 'POST';
+    //         newForm.action = '{{ url("/certificates/" . $certificate->id . "/version") }}';
+    //         newForm.style.display = 'none';
+    //         document.body.appendChild(newForm);
+    //         newForm.submit();
+    //     }
+    // }
 
     // Toast notification
     function showToast(message, type = 'info') {
