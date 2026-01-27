@@ -6,307 +6,267 @@ use App\Models\Certificate;
 use App\Models\User;
 use App\Models\Course;
 use Illuminate\Http\Request;
-use Carbon\Carbon;
-use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\DB; // <- fixed import
+use App\Services\CertificateService;
+use App\Traits\CertificateStatistics;
+use App\Http\Requests\StoreCertificateRequest;
+use App\Http\Requests\UpdateCertificateRequest;
 
 class CertificateController extends Controller
 {
+    use CertificateStatistics;
+
+    // Inject the service via constructor
+    public function __construct(private CertificateService $service) {}
+
     /**
-     * Display a listing of the certificates.
+     * Display a listing of certificates with filters and statistics.
      */
     public function index(Request $request)
     {
-        // Build query with filters
-        $query = Certificate::with(['user', 'course'])
-            ->when($request->filled('user_id'), function ($q) use ($request) {
-                $q->where('user_id', $request->user_id);
-            })
-            ->when($request->filled('course_id'), function ($q) use ($request) {
-                $q->where('course_id', $request->course_id);
-            })
-            ->when($request->filled('search'), function ($q) use ($request) {
-                $q->whereHas('user', function ($query) use ($request) {
-                    $query->where('name', 'like', '%' . $request->search . '%')
-                        ->orWhere('email', 'like', '%' . $request->search . '%');
-                })->orWhereHas('course', function ($query) use ($request) {
-                    $query->where('title', 'like', '%' . $request->search . '%');
-                });
-            })
-            ->latest();
+        // Get filtered & paginated certificates
+        $certificates = $this->service->getFilteredCertificates($request);
 
-        // Get paginated results
-        $certificates = $query->paginate(20)->appends($request->query());
-        
-        // Get general statistics
-        $certificatesCount = Certificate::count();
+        // Get status counts via Trait
+        $statusCounts = $this->certificateStatusCounts();
+
+        // Most certified course via Service
+        [$mostCourse, $mostCount] = $this->service->mostCertifiedCourse();
+
+        // Latest certificate
         $latestCertificate = Certificate::with(['user', 'course'])->latest()->first();
-        
-        // Calculate certificate status counts
-        $validCount = Certificate::where(function($query) {
-            $query->whereNull('expires_at')
-                  ->orWhere('expires_at', '>', now());
-        })->where(function($query) {
-            $query->whereNotNull('issued_at')
-                  ->where('issued_at', '<=', now());
-        })->count();
 
-        $expiredCount = Certificate::whereNotNull('expires_at')
-            ->where('expires_at', '<', now())
-            ->count();
+        // Additional data for filters
+        $users = User::all();
+        $courses = Course::all();
 
-        $expiringSoonCount = Certificate::whereNotNull('expires_at')
-            ->where('expires_at', '>', now())
-            ->where('expires_at', '<=', now()->addDays(30))
-            ->count();
-
-        $notIssuedCount = Certificate::whereNull('issued_at')
-            ->orWhere('issued_at', '>', now())
-            ->count();
-        
-        // Calculate the most certified course with count
-        $mostCertifiedCourseData = Certificate::select('course_id')
-            ->selectRaw('COUNT(*) as certificate_count')
-            ->groupBy('course_id')
-            ->orderByDesc('certificate_count')
-            ->first();
-        
-        $mostCertifiedCourse = null;
-        $mostCertifiedCourseCount = 0;
-        
-        if ($mostCertifiedCourseData) {
-            $mostCertifiedCourse = Course::find($mostCertifiedCourseData->course_id);
-            $mostCertifiedCourseCount = $mostCertifiedCourseData->certificate_count;
-        }
-        
-        // Get course statistics for all courses - FIXED: Use DB raw query
-        $courseStats = DB::table('courses')
-            ->leftJoin('certificates', 'courses.id', '=', 'certificates.course_id')
-            ->select('courses.*', DB::raw('COUNT(certificates.id) as certificates_count'))
-            ->groupBy('courses.id')
-            ->orderByDesc('certificates_count')
-            ->get();
-        
-        // Get user statistics - FIXED: Use DB raw query
-        $topUsers = DB::table('users')
-            ->leftJoin('certificates', 'users.id', '=', 'certificates.user_id')
-            ->select('users.*', DB::raw('COUNT(certificates.id) as certificates_count'))
-            ->groupBy('users.id')
-            ->orderByDesc('certificates_count')
-            ->limit(5)
-            ->get();
-        
-        // Get recent certificates
-        $recentCertificates = Certificate::with(['user', 'course'])
-            ->latest()
-            ->take(5)
-            ->get();
-        
-        // Get certificates by month for chart (last 6 months) - FIXED for PostgreSQL
-        $certificatesByMonth = Certificate::selectRaw("EXTRACT(MONTH FROM issued_at) as month, COUNT(*) as count")
-            ->whereNotNull('issued_at')
-            ->where('issued_at', '>=', now()->subMonths(6))
-            ->groupBy('month')
-            ->orderBy('month')
-            ->get()
-            ->mapWithKeys(function ($item) {
-                return [
-                    date('F', mktime(0, 0, 0, $item->month, 1)) => $item->count
-                ];
-            });
-        
-        return view('certificates.index', [
-            'certificates' => $certificates,
-            'users' => User::all(),
-            'courses' => Course::all(),
-            
-            // Statistics
-            'certificatesCount' => $certificatesCount,
-            'latestCertificate' => $latestCertificate,
-            
-            // Status counts
-            'validCount' => $validCount,
-            'expiredCount' => $expiredCount,
-            'expiringSoonCount' => $expiringSoonCount,
-            'notIssuedCount' => $notIssuedCount,
-            
-            // Course statistics
-            'mostCertifiedCourse' => $mostCertifiedCourse,
-            'mostCertifiedCourseCount' => $mostCertifiedCourseCount,
-            'courseStats' => $courseStats,
-            
-            // User statistics
-            'topUsers' => $topUsers,
-            'recentCertificates' => $recentCertificates,
-            'certificatesByMonth' => $certificatesByMonth,
-        ]);
+        return view('certificates.index', compact(
+            'certificates',
+            'statusCounts',
+            'mostCourse',
+            'mostCount',
+            'latestCertificate',  
+            'users',
+            'courses'
+        ));
     }
 
+
     /**
-     * Show the form for creating a new certificate.
+     * Show form for creating a certificate.
      */
     public function create()
     {
         $users = User::all();
         $courses = Course::all();
-        
         return view('certificates.create', compact('users', 'courses'));
     }
 
     /**
-     * Store a newly created certificate in storage.
+     * Store a newly created certificate.
      */
-    public function store(Request $request)
+    public function store(StoreCertificateRequest $request)
+    {
+        $this->service->create($request->validated());
+        return redirect()->route('certificates.index')
+            ->with('success', 'Certificate created successfully!');
+    }
+
+    /**
+     * Display a specific certificate.
+     */
+/**
+ * Display a specific certificate.
+ */
+/**
+ * Display a specific certificate.
+ */
+/**
+ * Display a specific certificate.
+ */
+    public function show(Certificate $certificate)
+    {
+        $certificate->load(['user', 'course']);
+
+        // --- Status flags ---
+        $isExpired =
+            $certificate->expires_at !== null
+            && $certificate->expires_at->isPast();
+
+        $isExpiringSoon =
+            $certificate->expires_at !== null
+            && $certificate->expires_at->isFuture()
+            && $certificate->expires_at <= now()->addDays(30);
+
+        // --- Status presentation ---
+        [$certificateStatusColor, $certificateStatusIcon, $certificateStatusText] = match (true) {
+            $certificate->issued_at === null
+                || $certificate->issued_at > now()
+                => ['secondary', 'fa-clock', 'Pending'],
+
+            $isExpired
+                => ['danger', 'fa-times-circle', 'Expired'],
+
+            $isExpiringSoon
+                => ['warning', 'fa-exclamation-triangle', 'Expiring Soon'],
+
+            default
+                => ['success', 'fa-check-circle', 'Valid'],
+        };
+
+        // --- User valid certificates count ---
+        $userValidCertificatesCount = $certificate->user
+            ->certificates()
+            ->where(function ($q) {
+                $q->whereNull('expires_at')
+                ->orWhere('expires_at', '>', now());
+            })
+            ->count();
+
+        // --- Course average rating (if ratings exist) ---
+        $courseAverageRating = method_exists($certificate->course, 'ratings')
+            ? $certificate->course->ratings()->avg('rating') ?? 0
+            : 0;
+
+        // --- Related certificates for same course ---
+        $relatedCertificates = Certificate::with('user')
+            ->where('course_id', $certificate->course_id)
+            ->where('id', '<>', $certificate->id)
+            ->latest()
+            ->take(5)
+            ->get();
+
+        return view('certificates.show', compact(
+            'certificate',
+            'certificateStatusColor',
+            'certificateStatusIcon',
+            'certificateStatusText',
+            'isExpired',
+            'isExpiringSoon',
+            'userValidCertificatesCount',
+            'courseAverageRating',
+            'relatedCertificates'
+        ));
+    }
+
+
+    /**
+     * Show form for editing a certificate.
+     */
+    public function edit(Certificate $certificate)
+    {
+        $certificate->load(['user', 'course', 'creator', 'updater']); // preload relationships
+        $userCertificatesCount = $certificate->user->certificates()->count();
+        $courseCertificatesCount = $certificate->course->certificates()->count();
+
+        // Pre-calculate status variables
+        $now = now();
+        $isExpired = $certificate->expires_at?->isPast() ?? false;
+        $isExpiringSoon = $certificate->expires_at && $certificate->expires_at->diffInDays($now, false) <= 30;
+        $certificateStatusColor = $isExpired ? 'danger' : ($isExpiringSoon ? 'warning' : 'success');
+        $certificateStatusText = $isExpired ? 'Expired' : ($isExpiringSoon ? 'Expiring Soon' : 'Active');
+        $certificateStatusIcon = $isExpired ? 'fa-times-circle' : ($isExpiringSoon ? 'fa-exclamation-triangle' : 'fa-check-circle');
+
+        return view('certificates.edit', compact(
+            'certificate', 
+            'userCertificatesCount', 
+            'courseCertificatesCount', 
+            'certificateStatusColor', 
+            'certificateStatusText', 
+            'certificateStatusIcon'
+        ));
+    }
+
+
+    /**
+     * Update a certificate.
+     */
+    public function update(Request $request, Certificate $certificate)
     {
         $request->validate([
-            'user_id' => 'required|exists:users,id',
-            'course_id' => 'required|exists:courses,id',
-            'certificate_code' => 'required|string|unique:certificates,certificate_code',
-            'expires_at' => 'nullable|date',
+            'issued_at' => 'required|date',
+            'expires_at' => 'nullable|date|after_or_equal:issued_at',
+            'update_reason' => 'nullable|string|max:500',
+            'send_update_email' => 'nullable|boolean',
+            'generate_new_pdf' => 'nullable|boolean',
+            'add_to_audit_log' => 'nullable|boolean',
         ]);
 
-        Certificate::create([
-            'user_id' => $request->user_id,
-            'course_id' => $request->course_id,
-            'certificate_code' => $request->certificate_code,
-            'issued_at' => now(),
-            'expires_at' => $request->expires_at,
-        ]);
-
-        return redirect()->route('certificates.index')->with('success', 'Certificate created successfully!');
-    }
-
-    /**
-     * Display the specified certificate.
-     */
-    public function show(string $id)
-    {
-        $certificate = Certificate::with(['user', 'course'])->findOrFail($id);
-        return view('certificates.show', compact('certificate'));
-    }
-
-    /**
-     * Show the form for editing the specified certificate.
-     */
-    public function edit($id)
-    {
-        $certificate = Certificate::findOrFail($id);
-        $users = User::all();
-        $courses = Course::all();
-        
-        return view('certificates.edit', compact('certificate', 'users', 'courses'));
-    }
-
-    /**
-     * Update the specified certificate in storage.
-     */
-    public function update(Request $request, $id)
-    {
-        $request->validate([
-            'user_id' => 'required|exists:users,id',
-            'course_id' => 'required|exists:courses,id',
-            'certificate_code' => 'required|string|unique:certificates,certificate_code,' . $id,
-            'expires_at' => 'nullable|date',
-        ]);
-
-        $certificate = Certificate::findOrFail($id);
+        // Save updates
         $certificate->update([
-            'user_id' => $request->user_id,
-            'course_id' => $request->course_id,
-            'certificate_code' => $request->certificate_code,
+            'issued_at' => $request->issued_at,
             'expires_at' => $request->expires_at,
         ]);
 
-        return redirect()->route('certificates.index')->with('success', 'Certificate updated successfully!');
+        // Optional: regenerate PDF
+        if ($request->filled('generate_new_pdf')) {
+            // $certificate->generatePDF();
+        }
+
+        // Optional: send notification
+        if ($request->filled('send_update_email')) {
+            // Mail::to($certificate->user->email)->send(new CertificateUpdated($certificate));
+        }
+
+        return redirect()->route('certificates.show', $certificate->id)
+            ->with('success', 'Certificate updated successfully!');
     }
 
+
     /**
-     * Remove the specified certificate from storage.
+     * Delete a certificate.
      */
-    public function destroy(string $id)
+    public function destroy(Certificate $certificate)
     {
-        $certificate = Certificate::findOrFail($id);
         $certificate->delete();
-
-        return redirect()->route('certificates.index')->with('success', 'Certificate deleted successfully.');
+        return redirect()->route('certificates.index')
+            ->with('success', 'Certificate deleted successfully.');
     }
-    
+
     /**
-     * Show statistics dashboard.
+     * Dashboard statistics.
      */
     public function dashboard()
     {
-        // Total statistics
         $totalCertificates = Certificate::count();
         $totalUsers = User::count();
         $totalCourses = Course::count();
-        
-        // Certificate status counts
-        $validCount = Certificate::where(function($query) {
-            $query->whereNull('expires_at')
-                  ->orWhere('expires_at', '>', now());
-        })->where(function($query) {
-            $query->whereNotNull('issued_at')
-                  ->where('issued_at', '<=', now());
-        })->count();
+        $statusCounts = $this->certificateStatusCounts();
+        [$mostCourse, $mostCount] = $this->service->mostCertifiedCourse();
 
-        $expiredCount = Certificate::whereNotNull('expires_at')
-            ->where('expires_at', '<', now())
-            ->count();
-
-        $expiringSoonCount = Certificate::whereNotNull('expires_at')
-            ->where('expires_at', '>', now())
-            ->where('expires_at', '<=', now()->addDays(30))
-            ->count();
-        
-        // Most certified course
-        $mostCertifiedCourseData = Certificate::select('course_id')
-            ->selectRaw('COUNT(*) as certificate_count')
-            ->groupBy('course_id')
-            ->orderByDesc('certificate_count')
-            ->first();
-        
-        $mostCertifiedCourse = null;
-        $mostCertifiedCourseCount = 0;
-        
-        if ($mostCertifiedCourseData) {
-            $mostCertifiedCourse = Course::find($mostCertifiedCourseData->course_id);
-            $mostCertifiedCourseCount = $mostCertifiedCourseData->certificate_count;
-        }
-        
-        // Recent activity
         $recentCertificates = Certificate::with(['user', 'course'])
             ->latest()
             ->take(10)
             ->get();
-        
-        // Course distribution - FIXED: Use DB raw query
+
+        // Course distribution
         $courseDistribution = DB::table('courses')
             ->leftJoin('certificates', 'courses.id', '=', 'certificates.course_id')
             ->select('courses.*', DB::raw('COUNT(certificates.id) as certificates_count'))
             ->groupBy('courses.id')
             ->orderByDesc('certificates_count')
             ->get();
-        
-        // Monthly trends (last 12 months) - FIXED for PostgreSQL
-        $monthlyTrends = Certificate::selectRaw("TO_CHAR(issued_at, 'YYYY-MM') as month, COUNT(*) as count")
+
+        // Monthly trends (last 12 months)
+        $monthlyTrends = Certificate::selectRaw(
+                "TO_CHAR(issued_at, 'YYYY-MM') as month, COUNT(*) as count"
+            )
             ->whereNotNull('issued_at')
             ->where('issued_at', '>=', now()->subMonths(12))
             ->groupBy('month')
             ->orderBy('month')
             ->get();
-        
-        return view('certificates.dashboard', [
-            'totalCertificates' => $totalCertificates,
-            'totalUsers' => $totalUsers,
-            'totalCourses' => $totalCourses,
-            'validCount' => $validCount,
-            'expiredCount' => $expiredCount,
-            'expiringSoonCount' => $expiringSoonCount,
-            'mostCertifiedCourse' => $mostCertifiedCourse,
-            'mostCertifiedCourseCount' => $mostCertifiedCourseCount,
-            'recentCertificates' => $recentCertificates,
-            'courseDistribution' => $courseDistribution,
-            'monthlyTrends' => $monthlyTrends,
-        ]);
+
+        return view('certificates.dashboard', compact(
+            'totalCertificates',
+            'totalUsers',
+            'totalCourses',
+            'statusCounts',
+            'mostCourse',
+            'mostCount',
+            'recentCertificates',
+            'courseDistribution',
+            'monthlyTrends'
+        ));
     }
 }
