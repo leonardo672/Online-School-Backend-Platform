@@ -55,6 +55,22 @@ class Course extends Model
     }
 
     /**
+     * Get the enrollments for this course.
+     */
+    public function enrollments(): HasMany
+    {
+        return $this->hasMany(Enrollment::class);
+    }
+
+    /**
+     * Get the lessons for this course.
+     */
+    public function lessons(): HasMany
+    {
+        return $this->hasMany(Lesson::class);
+    }
+
+    /**
      * Get the certificates for this course.
      */
     public function certificates(): HasMany
@@ -70,6 +86,22 @@ class Course extends Model
         return $this->belongsToMany(User::class, 'certificates')
                     ->withPivot('certificate_code', 'issued_at', 'expires_at')
                     ->withTimestamps();
+    }
+
+    /**
+     * Get the ratings/reviews for this course.
+     */
+    public function ratings(): HasMany 
+    {
+        return $this->hasMany(Review::class);
+    }
+
+    /**
+     * Alias for ratings relationship (for consistency)
+     */
+    public function reviews(): HasMany
+    {
+        return $this->ratings();
     }
 
     /**
@@ -128,8 +160,27 @@ class Course extends Model
         return 'slug';
     }
 
-    public function ratings(): HasMany 
+    /**
+     * Get the average rating for the course.
+     */
+    public function getAverageRatingAttribute()
     {
-        return $this->hasMany(Review::class);
+        return $this->ratings()->avg('rating') ?? 0;
+    }
+
+    /**
+     * Get the total number of students enrolled.
+     */
+    public function getTotalStudentsAttribute()
+    {
+        return $this->enrollments()->count();
+    }
+
+    /**
+     * Get the total number of lessons.
+     */
+    public function getTotalLessonsAttribute()
+    {
+        return $this->lessons()->count();
     }
 }

@@ -3,41 +3,50 @@
 namespace App\Http\Controllers;
 
 use App\Models\Course;
-use App\Models\Category;
-use App\Models\User;
+use App\Http\Requests\CourseRequest;
+use App\Services\CourseService;
+use App\Traits\HandlesCourseFilters;
+use App\Traits\HandlesCourseResponse;
 use Illuminate\Http\Request;
-use Illuminate\Support\Str;
+use Illuminate\Support\Facades\Log; // Add this
 
 class CourseController extends Controller
 {
+    use HandlesCourseFilters, HandlesCourseResponse;
+
+    protected CourseService $courseService;
+
+    /**
+     * Inject CourseService dependency.
+     */
+    public function __construct(CourseService $courseService)
+    {
+        $this->courseService = $courseService;
+    }
+
     /**
      * Display a listing of the courses.
      */
-    public function index()
+    public function index(Request $request)
     {
-        $courses = Course::with(['category', 'instructor'])
-            ->when(request('search'), function ($query) {
-                $query->where('title', 'like', '%' . request('search') . '%')
-                    ->orWhere('description', 'like', '%' . request('search') . '%');
-            })
-            ->when(request('category'), function ($query) {
-                $query->whereHas('category', function ($q) {
-                    $q->where('slug', request('category'));
-                });
-            })
-            ->when(request('level'), function ($query) {
-                $query->where('level', request('level'));
-            })
-            ->latest()
-            ->paginate(10); // Changed from all() to paginate(10)
+        $filters = $this->extractFilters($request);
+        
+        $courses = $this->courseService->getFilteredCourses($filters);
+        $statistics = $this->courseService->getCourseStatistics();
+        $filterOptions = $this->getFilterOptions();
 
-        // Calculate statistics
-        $totalCourses = Course::count();
-        $publishedCount = Course::where('published', true)->count();
-        $draftCount = Course::where('published', false)->count();
-        $freeCount = Course::where('price', 0)->count();
+        if ($this->expectsJson($request)) {
+            return $this->jsonResponse([
+                'courses' => $courses,
+                'statistics' => $statistics,
+            ]);
+        }
 
-        return view('courses.index', compact('courses', 'totalCourses', 'publishedCount', 'draftCount', 'freeCount'));
+        return view('courses.index', array_merge(
+            compact('courses'),
+            $statistics,
+            ['filterOptions' => $filterOptions]
+        ));
     }
 
     /**
@@ -45,105 +54,191 @@ class CourseController extends Controller
      */
     public function create()
     {
-        $categories = Category::all(); // Retrieve all categories
-        $instructors = User::where('role', 'instructor')->get(); // Retrieve all instructors
-        $levels = Course::LEVELS;
+        $formData = $this->courseService->getFormData();
         
-        return view('courses.create', compact('categories', 'instructors', 'levels'));
+        return view('courses.create', $formData);
     }
 
     /**
      * Store a newly created course in storage.
      */
-    public function store(Request $request)
+    public function store(CourseRequest $request)
     {
-        // Validate the request data
-        $request->validate([
-            'title' => 'required|string|max:255',
-            'description' => 'required|string',
-            'category_id' => 'required|exists:categories,id',
-            'instructor_id' => 'required|exists:users,id',
-            'price' => 'required|numeric|min:0',
-            'level' => 'required|in:' . implode(',', Course::LEVELS),
-        ]);
-
-        // Create a new course
-        Course::create([
-            'title' => $request->title,
-            'slug' => Str::slug($request->title) . '-' . uniqid(),
-            'description' => $request->description,
-            'category_id' => $request->category_id,
-            'instructor_id' => $request->instructor_id,
-            'price' => $request->price,
-            'level' => $request->level,
-            'published' => $request->has('published'),
-        ]);
-
-        // Redirect to the courses list with a success message
-        return redirect()->route('courses.index')->with('success', 'Course created successfully!');
+        try {
+            // Log the validated data
+            Log::info('Course store attempt', ['data' => $request->validated()]);
+            
+            $course = $this->courseService->createCourse($request->validated());
+            
+            // Log success
+            Log::info('Course created successfully', ['course_id' => $course->id]);
+            
+            if ($this->expectsJson($request)) {
+                return $this->jsonResponse([
+                    'message' => 'Course created successfully!',
+                    'course' => $course->load(['category', 'instructor']),
+                ], 201);
+            }
+            
+            // FIXED: Make sure we're redirecting with success message
+            return redirect()
+                ->route('courses.index')
+                ->with('success', 'Course created successfully!');
+            
+        } catch (\Exception $e) {
+            // Log the error
+            Log::error('Course creation failed', [
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString()
+            ]);
+            
+            if ($this->expectsJson($request)) {
+                return $this->jsonResponse(['error' => $e->getMessage()], 500);
+            }
+            
+            // FIXED: Return back with error and input
+            return back()
+                ->with('error', 'Error creating course: ' . $e->getMessage())
+                ->withInput();
+        }
     }
 
     /**
      * Display the specified course.
      */
-    public function show(string $id)
+    public function show(Request $request, string $id)
     {
-        $course = Course::findOrFail($id); // Find the course by id
-        return view('courses.show', compact('course')); // Pass the course data to the view
+        try {
+            $course = Course::with(['category', 'instructor'])->findOrFail($id);
+            
+            // Add counts if relationships exist
+            if (method_exists($course, 'enrollments')) {
+                $course->loadCount('enrollments');
+            }
+            if (method_exists($course, 'lessons')) {
+                $course->loadCount('lessons');
+            }
+            if (method_exists($course, 'reviews')) {
+                $course->loadCount('reviews');
+                $course->average_rating = $course->reviews()->avg('rating') ?? 0;
+            }
+            
+            if ($this->expectsJson($request)) {
+                return $this->jsonResponse(['course' => $course]);
+            }
+            
+            return view('courses.show', compact('course'));
+            
+        } catch (\Exception $e) {
+            Log::error('Course show failed', ['error' => $e->getMessage()]);
+            
+            if ($this->expectsJson($request)) {
+                return $this->jsonResponse(['error' => 'Course not found'], 404);
+            }
+            
+            return redirect()
+                ->route('courses.index')
+                ->with('error', 'Course not found');
+        }
     }
 
     /**
      * Show the form for editing the specified course.
      */
-    public function edit($id)
+    public function edit(string $id)
     {
-        $course = Course::findOrFail($id); // Retrieve the course by ID
-        $categories = Category::all(); // Retrieve all categories
-        $instructors = User::where('role', 'instructor')->get(); // Retrieve all instructors
-        $levels = Course::LEVELS;
-        
-        return view('courses.edit', compact('course', 'categories', 'instructors', 'levels'));
+        try {
+            $course = Course::findOrFail($id);
+            $formData = $this->courseService->getFormData();
+            
+            return view('courses.edit', array_merge(
+                compact('course'),
+                $formData
+            ));
+            
+        } catch (\Exception $e) {
+            Log::error('Course edit failed', ['error' => $e->getMessage()]);
+            
+            return redirect()
+                ->route('courses.index')
+                ->with('error', 'Course not found');
+        }
     }
 
     /**
      * Update the specified course in storage.
      */
-    public function update(Request $request, $id)
+    public function update(CourseRequest $request, string $id)
     {
-        // Validate the request data
-        $request->validate([
-            'title' => 'required|string|max:255',
-            'description' => 'required|string',
-            'category_id' => 'required|exists:categories,id',
-            'instructor_id' => 'required|exists:users,id',
-            'price' => 'required|numeric|min:0',
-            'level' => 'required|in:' . implode(',', Course::LEVELS),
-        ]);
-
-        // Update the course
-        $course = Course::findOrFail($id);
-        $course->update([
-            'title' => $request->title,
-            'description' => $request->description,
-            'category_id' => $request->category_id,
-            'instructor_id' => $request->instructor_id,
-            'price' => $request->price,
-            'level' => $request->level,
-            'published' => $request->has('published'),
-        ]);
-
-        // Redirect to the courses list with a success message
-        return redirect()->route('courses.index')->with('success', 'Course updated successfully!');
+        try {
+            Log::info('Course update attempt', ['id' => $id, 'data' => $request->validated()]);
+            
+            $course = Course::findOrFail($id);
+            $updatedCourse = $this->courseService->updateCourse($course, $request->validated());
+            
+            Log::info('Course updated successfully', ['course_id' => $updatedCourse->id]);
+            
+            if ($this->expectsJson($request)) {
+                return $this->jsonResponse([
+                    'message' => 'Course updated successfully!',
+                    'course' => $updatedCourse->load(['category', 'instructor']),
+                ]);
+            }
+            
+            return redirect()
+                ->route('courses.index')
+                ->with('success', 'Course updated successfully!');
+            
+        } catch (\Exception $e) {
+            Log::error('Course update failed', [
+                'id' => $id,
+                'error' => $e->getMessage()
+            ]);
+            
+            if ($this->expectsJson($request)) {
+                return $this->jsonResponse(['error' => $e->getMessage()], 500);
+            }
+            
+            return back()
+                ->with('error', 'Error updating course: ' . $e->getMessage())
+                ->withInput();
+        }
     }
 
     /**
      * Remove the specified course from storage.
      */
-    public function destroy(string $id)
+    public function destroy(Request $request, string $id)
     {
-        $course = Course::findOrFail($id); // Find the course by id
-        $course->delete(); // Delete the course
-
-        return redirect()->route('courses.index')->with('success', 'Course deleted successfully.');
+        try {
+            Log::info('Course delete attempt', ['id' => $id]);
+            
+            $course = Course::findOrFail($id);
+            $this->courseService->deleteCourse($course);
+            
+            Log::info('Course deleted successfully', ['id' => $id]);
+            
+            if ($this->expectsJson($request)) {
+                return $this->jsonResponse([
+                    'message' => 'Course deleted successfully!'
+                ]);
+            }
+            
+            return redirect()
+                ->route('courses.index')
+                ->with('success', 'Course deleted successfully!');
+            
+        } catch (\Exception $e) {
+            Log::error('Course delete failed', [
+                'id' => $id,
+                'error' => $e->getMessage()
+            ]);
+            
+            if ($this->expectsJson($request)) {
+                return $this->jsonResponse(['error' => $e->getMessage()], 500);
+            }
+            
+            return back()->with('error', 'Error deleting course: ' . $e->getMessage());
+        }
     }
 }
