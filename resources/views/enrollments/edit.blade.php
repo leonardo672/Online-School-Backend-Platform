@@ -264,216 +264,154 @@
 
 <script>
   document.addEventListener('DOMContentLoaded', function() {
-    // Set default enrollment date to current date/time if empty
-    const enrolledAtInput = document.getElementById('enrolled_at');
-    if (!enrolledAtInput.value) {
-      const now = new Date();
-      const year = now.getFullYear();
-      const month = String(now.getMonth() + 1).padStart(2, '0');
-      const day = String(now.getDate()).padStart(2, '0');
-      const hours = String(now.getHours()).padStart(2, '0');
-      const minutes = String(now.getMinutes()).padStart(2, '0');
-      enrolledAtInput.value = `${year}-${month}-${day}T${hours}:${minutes}`;
-    }
-    
-    // Form submission validation
-    const form = document.querySelector('form');
-    form.addEventListener('submit', function(e) {
-      const userIdSelect = document.getElementById('user_id');
-      const courseIdSelect = document.getElementById('course_id');
-      const enrolledAtInput = document.getElementById('enrolled_at');
-      
-      let isValid = true;
-      
-      if (!userIdSelect.value) {
-        userIdSelect.classList.add('is-invalid');
-        isValid = false;
-      }
-      
-      if (!courseIdSelect.value) {
-        courseIdSelect.classList.add('is-invalid');
-        isValid = false;
-      }
-      
-      if (!enrolledAtInput.value) {
-        enrolledAtInput.classList.add('is-invalid');
-        isValid = false;
-      }
-      
-      // Check for duplicate enrollment (excluding current enrollment)
-      const currentUserId = '{{ $enrollment->user_id }}';
-      const currentCourseId = '{{ $enrollment->course_id }}';
-      const selectedUserId = userIdSelect.value;
-      const selectedCourseId = courseIdSelect.value;
-      
-      if (selectedUserId && selectedCourseId && 
-          (selectedUserId != currentUserId || selectedCourseId != currentCourseId)) {
-        // This would typically be an AJAX call to check for existing enrollment
-        // For demonstration, we'll show a confirmation dialog
-        const duplicateWarning = document.querySelector('.duplicate-warning');
-        if (duplicateWarning) {
-          if (!confirm('This user might already be enrolled in this course. Continue anyway?')) {
-            e.preventDefault();
-            return false;
-          }
-        }
-      }
-      
-      if (!isValid) {
-        e.preventDefault();
-        // Show error message
-        const errorDiv = document.createElement('div');
-        errorDiv.className = 'alert alert-danger mt-3';
-        errorDiv.innerHTML = '<strong>Error!</strong> Please fill in all required fields marked with *';
-        form.prepend(errorDiv);
-        
-        // Scroll to top of form
-        window.scrollTo({ top: 0, behavior: 'smooth' });
-        
-        return false;
-      }
-      
-      return true;
-    });
-    
-    // Check for duplicate enrollment
     const userIdSelect = document.getElementById('user_id');
     const courseIdSelect = document.getElementById('course_id');
+    const form = document.getElementById('enrollmentForm');
+    const currentEnrollmentId = {{ $enrollment->id ?? 'null' }};
     
+    let duplicateCheckTimeout;
+    let warningShown = false;
+
+    // Function to check for duplicate enrollment
     function checkDuplicateEnrollment() {
       const userId = userIdSelect.value;
       const courseId = courseIdSelect.value;
-      const currentUserId = '{{ $enrollment->user_id }}';
-      const currentCourseId = '{{ $enrollment->course_id }}';
       
-      // Remove existing warning
-      const existingWarning = document.querySelector('.duplicate-warning');
-      if (existingWarning) {
-        existingWarning.remove();
+      // Clear previous timeout
+      clearTimeout(duplicateCheckTimeout);
+      
+      // Remove existing warnings
+      removeDuplicateWarning();
+      
+      // Only check if both fields have values
+      if (!userId || !courseId) {
+        return;
       }
       
-      if (userId && courseId && 
-          (userId != currentUserId || courseId != currentCourseId)) {
-        // Show checking indicator
-        const checkingDiv = document.createElement('div');
-        checkingDiv.className = 'alert alert-info duplicate-warning mt-2';
-        checkingDiv.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Checking for duplicate enrollment...';
-        
-        const formGroup = userIdSelect.closest('.mb-3');
-        formGroup.appendChild(checkingDiv);
-        
-        // Simulate API call (replace with actual AJAX call)
-        setTimeout(() => {
-          checkingDiv.remove();
-          
-          // This is where you would make an actual API call
-          // Example:
-          /*
-          fetch(`/api/check-enrollment/${userId}/${courseId}?exclude={{ $enrollment->id }}`)
-            .then(response => response.json())
-            .then(data => {
-              if (data.exists) {
-                showDuplicateWarning();
-              }
-            });
-          */
-          
-          // For demo purposes, show warning 50% of the time
-          if (Math.random() > 0.5) {
-            showDuplicateWarning();
-          }
-        }, 500);
-      }
+      // Show checking indicator
+      showCheckingIndicator();
+      
+      // Debounce the check to avoid too many requests
+      duplicateCheckTimeout = setTimeout(() => {
+        // Make AJAX call to check enrollment
+        fetch(`/enrollments/check-duplicate?user_id=${userId}&course_id=${courseId}&exclude_id=${currentEnrollmentId}`)
+          .then(response => response.json())
+          .then(data => {
+            // Remove checking indicator
+            removeCheckingIndicator();
+            
+            if (data.exists) {
+              showDuplicateWarning();
+              warningShown = true;
+            } else {
+              warningShown = false;
+            }
+          })
+          .catch(error => {
+            console.error('Error checking enrollment:', error);
+            removeCheckingIndicator();
+          });
+      }, 500); // Wait 500ms after last change before checking
     }
-    
-    userIdSelect.addEventListener('change', checkDuplicateEnrollment);
-    courseIdSelect.addEventListener('change', checkDuplicateEnrollment);
-    
-    // Function to show duplicate warning
+
+    // Show checking indicator
+    function showCheckingIndicator() {
+      removeCheckingIndicator();
+      
+      const indicator = document.createElement('div');
+      indicator.className = 'alert alert-info checking-indicator mt-2';
+      indicator.innerHTML = `
+        <i class="fas fa-spinner fa-spin"></i> 
+        Checking for existing enrollment...
+      `;
+      
+      const formGroup = courseIdSelect.closest('.mb-3');
+      formGroup.appendChild(indicator);
+    }
+
+    // Remove checking indicator
+    function removeCheckingIndicator() {
+      document.querySelector('.checking-indicator')?.remove();
+    }
+
+    // Show duplicate warning
     function showDuplicateWarning() {
-      const existingWarning = document.querySelector('.duplicate-warning');
-      if (existingWarning) {
-        existingWarning.remove();
-      }
+      removeDuplicateWarning();
       
       const warningDiv = document.createElement('div');
       warningDiv.className = 'alert alert-warning duplicate-warning mt-2';
       warningDiv.innerHTML = `
         <i class="fas fa-exclamation-triangle"></i> 
-        <strong>Warning:</strong> This user might already be enrolled in this course. 
-        Please verify before saving.
+        <strong>Warning:</strong> This user is already enrolled in this course.
+        <button type="button" class="btn btn-sm btn-warning ms-2" onclick="ignoreDuplicateWarning()">
+          Continue Anyway
+        </button>
       `;
       
-      const formGroup = userIdSelect.closest('.mb-3');
+      const formGroup = courseIdSelect.closest('.mb-3');
       formGroup.appendChild(warningDiv);
     }
-    
-    // Remove invalid class on input/change
-    const inputs = document.querySelectorAll('input, select, textarea');
+
+    // Remove duplicate warning
+    function removeDuplicateWarning() {
+      document.querySelector('.duplicate-warning')?.remove();
+    }
+
+    // Ignore warning and allow form submission
+    window.ignoreDuplicateWarning = function() {
+      removeDuplicateWarning();
+      warningShown = false;
+      
+      // Add hidden input to indicate warning was ignored
+      let ignoreInput = document.getElementById('ignore_duplicate');
+      if (!ignoreInput) {
+        ignoreInput = document.createElement('input');
+        ignoreInput.type = 'hidden';
+        ignoreInput.name = 'ignore_duplicate';
+        ignoreInput.id = 'ignore_duplicate';
+        ignoreInput.value = '1';
+        form.appendChild(ignoreInput);
+      }
+    };
+
+    // Handle form submission
+    form.addEventListener('submit', function(e) {
+      if (warningShown) {
+        e.preventDefault();
+        // Show confirmation dialog
+        if (confirm('This user might already be enrolled in this course. Continue anyway?')) {
+          ignoreDuplicateWarning();
+          form.submit();
+        }
+      }
+    });
+
+    // Add event listeners for changes
+    userIdSelect.addEventListener('change', checkDuplicateEnrollment);
+    courseIdSelect.addEventListener('change', checkDuplicateEnrollment);
+
+    // Initial check if both fields have values (for edit form)
+    if (userIdSelect.value && courseIdSelect.value) {
+      checkDuplicateEnrollment();
+    }
+
+    // Remove invalid class on input
+    const inputs = document.querySelectorAll('input, select');
     inputs.forEach(input => {
       input.addEventListener('input', function() {
         this.classList.remove('is-invalid');
       });
-      input.addEventListener('change', function() {
-        this.classList.remove('is-invalid');
-      });
     });
-    
-    // Reset form to original values
-    const resetButton = document.querySelector('button[type="reset"]');
-    resetButton.addEventListener('click', function() {
-      // Reset selects to original values
-      userIdSelect.value = '{{ $enrollment->user_id }}';
-      courseIdSelect.value = '{{ $enrollment->course_id }}';
-      
-      // Reset enrolled_at to original value
-      const originalEnrolledAt = '{{ $enrollment->enrolled_at ? $enrollment->enrolled_at->format("Y-m-d\\TH:i") : "" }}';
-      enrolledAtInput.value = originalEnrolledAt || new Date().toISOString().slice(0, 16);
-      
-      // Reset is_active checkbox
-      document.getElementById('is_active').checked = {{ $enrollment->is_active ?? true ? 'true' : 'false' }};
-      
-      // Reset notes
-      document.getElementById('notes').value = `{{ old('notes', $enrollment->notes ?? '') }}`;
-      
-      // Remove any validation warnings
-      inputs.forEach(input => input.classList.remove('is-invalid'));
-      
-      // Remove duplicate warnings
-      const warnings = document.querySelectorAll('.duplicate-warning');
-      warnings.forEach(warning => warning.remove());
-      
-      // Show success message
-      const resetMsg = document.createElement('div');
-      resetMsg.className = 'alert alert-success mt-3';
-      resetMsg.innerHTML = '<i class="fas fa-check-circle"></i> Form reset to original values';
-      form.prepend(resetMsg);
-      
-      setTimeout(() => resetMsg.remove(), 3000);
-    });
-    
-    // Show confirmation before leaving page if form has changes
-    let formChanged = false;
-    const formInputs = form.querySelectorAll('input, select, textarea');
-    
-    formInputs.forEach(input => {
-      input.addEventListener('input', () => formChanged = true);
-      input.addEventListener('change', () => formChanged = true);
-    });
-    
-    window.addEventListener('beforeunload', function(e) {
-      if (formChanged) {
-        e.preventDefault();
-        e.returnValue = 'You have unsaved changes. Are you sure you want to leave?';
-      }
-    });
-    
-    // Initialize tooltips
-    const tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
-    tooltipTriggerList.map(function (tooltipTriggerEl) {
-      return new bootstrap.Tooltip(tooltipTriggerEl);
+
+    // Auto-dismiss alerts after 5 seconds
+    const alerts = document.querySelectorAll('.alert:not(.duplicate-warning):not(.checking-indicator)');
+    alerts.forEach(alert => {
+      setTimeout(() => {
+        alert.style.transition = 'opacity 0.5s ease';
+        alert.style.opacity = '0';
+        setTimeout(() => alert.remove(), 500);
+      }, 5000);
     });
   });
 </script>
-
 @stop

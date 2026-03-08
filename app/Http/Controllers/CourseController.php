@@ -8,7 +8,7 @@ use App\Services\CourseService;
 use App\Traits\HandlesCourseFilters;
 use App\Traits\HandlesCourseResponse;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Log; // Add this
+use Illuminate\Support\Facades\Log; 
 
 class CourseController extends Controller
 {
