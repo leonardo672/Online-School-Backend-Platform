@@ -6,7 +6,7 @@ use App\Models\Certificate;
 use App\Models\User;
 use App\Models\Course;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\DB; // <- fixed import
+use Illuminate\Support\Facades\DB; 
 use App\Services\CertificateService;
 use App\Traits\CertificateStatistics;
 use App\Http\Requests\StoreCertificateRequest;
