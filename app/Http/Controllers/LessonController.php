@@ -1,20 +1,48 @@
 <?php
+// app/Http/Controllers/LessonController.php
 
 namespace App\Http\Controllers;
 
 use App\Models\Lesson;
 use App\Models\Course;
+use App\Services\LessonService;
+use App\Traits\HasCourseRelations;
+use App\Traits\HandlesLessonNavigation;
+use App\Traits\HandlesUserLessonProgress;
+use App\Http\Requests\Lesson\StoreLessonRequest;
+use App\Http\Requests\Lesson\UpdateLessonRequest;
+use App\Http\Requests\Lesson\MarkLessonCompleteRequest;
 use Illuminate\Http\Request;
+use Illuminate\Routing\Controller;
 
 class LessonController extends Controller
 {
+    use HasCourseRelations, HandlesLessonNavigation, HandlesUserLessonProgress;
+
+    /**
+     * The lesson service instance.
+     */
+    protected LessonService $lessonService;
+
+    /**
+     * Create a new controller instance.
+     */
+    public function __construct(LessonService $lessonService)
+    {
+        $this->lessonService = $lessonService;
+    }
+
     /**
      * Display a listing of the lessons.
      */
     public function index()
     {
-        $lessons = Lesson::with('course')->latest()->paginate(10); // Fetch lessons with pagination and eager loading
-        return view('lessons.index', compact('lessons'));
+        $lessons = $this->lessonService->getPaginatedLessons();
+        
+        return view('lessons.index', [
+            'lessons' => $lessons,
+            'totalCount' => $lessons->total(),
+        ]);
     }
 
     /**
@@ -22,35 +50,25 @@ class LessonController extends Controller
      */
     public function create()
     {
-        $courses = Course::all(); // Retrieve all courses
-        return view('lessons.create', compact('courses'));
+        $courses = $this->getCoursesForDropdown();
+        
+        return view('lessons.create', [
+            'courses' => $courses,
+            'nextPosition' => request('course_id') ? 
+                $this->getLessonCountForCourse(request('course_id')) + 1 : 1,
+        ]);
     }
 
     /**
      * Store a newly created lesson in storage.
      */
-    public function store(Request $request)
+    public function store(StoreLessonRequest $request)
     {
-        // Validate the request data
-        $request->validate([
-            'course_id' => 'required|exists:courses,id',
-            'title' => 'required|string|max:255',
-            'content' => 'nullable|string',
-            'video_url' => 'nullable|url',
-            'position' => 'required|integer|min:1',
-        ]);
+        $lesson = $this->lessonService->createLesson($request->validated());
 
-        // Create a new lesson
-        Lesson::create([
-            'course_id' => $request->course_id,
-            'title' => $request->title,
-            'content' => $request->content,
-            'video_url' => $request->video_url,
-            'position' => $request->position,
-        ]);
-
-        // Redirect to the lessons list with a success message
-        return redirect()->route('lessons.index')->with('success', 'Lesson created successfully!');
+        return redirect()
+            ->route('lessons.index')
+            ->with('success', "Lesson '{$lesson->title}' created successfully!");
     }
 
     /**
@@ -58,87 +76,65 @@ class LessonController extends Controller
      */
     public function show(string $id)
     {
-        $lesson = Lesson::with('course')->findOrFail($id);
+        $lesson = Lesson::findOrFail($id);
         
-        // Get previous and next lessons in the same course
-        $previousLesson = Lesson::where('course_id', $lesson->course_id)
-            ->where('id', '<', $lesson->id)
-            ->orderBy('id', 'desc')
-            ->first();
+        // Get all navigation and related data from service
+        $navigationData = $this->lessonService->getLessonWithNavigation($lesson);
+        
+        // Add user progress data if authenticated
+        if (auth()->check()) {
+            $navigationData['isCompleted'] = $this->lessonService->isLessonCompletedByUser(
+                auth()->user(), 
+                $lesson->id
+            );
+            $navigationData['courseProgress'] = $this->lessonService->getCourseProgressPercentage(
+                auth()->user(), 
+                $lesson->course_id
+            );
+            $navigationData['nextIncompleteLesson'] = $this->lessonService->getNextIncompleteLesson(
+                auth()->user(),
+                $lesson->course_id
+            );
+        }
 
-        $nextLesson = Lesson::where('course_id', $lesson->course_id)
-            ->where('id', '>', $lesson->id)
-            ->orderBy('id', 'asc')
-            ->first();
+        // Get breadcrumbs
+        $navigationData['breadcrumbs'] = $this->getLessonBreadcrumbs($lesson);
 
-        // Get all lessons in the course for statistics
-        $courseLessons = Lesson::where('course_id', $lesson->course_id)
-            ->orderBy('position')
-            ->get();
-
-        // Calculate lesson position in course
-        $lessonPosition = $courseLessons->search(function ($item) use ($lesson) {
-            return $item->id == $lesson->id;
-        }) + 1;
-
-        $totalLessons = $courseLessons->count();
-
-        // Get related lessons (other lessons in the same course)
-        $relatedLessons = Lesson::where('course_id', $lesson->course_id)
-            ->where('id', '!=', $lesson->id)
-            ->with('course')
-            ->orderBy('position')
-            ->take(5)
-            ->get();
-
-        return view('lessons.show', [
-            'lesson' => $lesson,
-            'previousLesson' => $previousLesson,
-            'nextLesson' => $nextLesson,
-            'courseLessons' => $courseLessons,
-            'lessonPosition' => $lessonPosition,
-            'totalLessons' => $totalLessons,
-            'relatedLessons' => $relatedLessons
-        ]);
+        return view('lessons.show', $navigationData);
     }
 
     /**
      * Show the form for editing the specified lesson.
      */
-    public function edit($id)
+    public function edit(string $id)
     {
         $lesson = Lesson::with('course')->findOrFail($id);
-        $courses = Course::all();
+        $courses = $this->getCoursesForDropdown();
         
-        return view('lessons.edit', compact('lesson', 'courses'));
+        // Get course lessons for position dropdown
+        $courseLessons = $this->getOrderedCourseLessons($lesson->course_id);
+        $maxPosition = $courseLessons->count();
+        
+        return view('lessons.edit', [
+            'lesson' => $lesson,
+            'courses' => $courses,
+            'courseLessons' => $courseLessons,
+            'maxPosition' => $maxPosition,
+        ]);
     }
 
     /**
      * Update the specified lesson in storage.
      */
-    public function update(Request $request, $id)
+    public function update(UpdateLessonRequest $request, string $id)
     {
-        // Validate the request data
-        $request->validate([
-            'course_id' => 'required|exists:courses,id',
-            'title' => 'required|string|max:255',
-            'content' => 'nullable|string',
-            'video_url' => 'nullable|url',
-            'position' => 'required|integer|min:1',
-        ]);
-
-        // Update the lesson
         $lesson = Lesson::findOrFail($id);
-        $lesson->update([
-            'course_id' => $request->course_id,
-            'title' => $request->title,
-            'content' => $request->content,
-            'video_url' => $request->video_url,
-            'position' => $request->position,
-        ]);
+        
+        $this->lessonService->updateLesson($lesson, $request->validated());
 
-        // Redirect to the lessons list with a success message
-        return redirect()->route('lessons.index')->with('success', 'Lesson updated successfully!');
+        return redirect()
+            ->route('lessons.show', $lesson->id)
+            ->with('success', "Lesson '{$lesson->title}' updated successfully!");
     }
 
     /**
@@ -147,36 +143,106 @@ class LessonController extends Controller
     public function destroy(string $id)
     {
         $lesson = Lesson::findOrFail($id);
-        $lesson->delete();
+        $lessonTitle = $lesson->title;
+        
+        $this->lessonService->deleteLesson($lesson);
 
-        return redirect()->route('lessons.index')->with('success', 'Lesson deleted successfully.');
+        return redirect()
+            ->route('lessons.index')
+            ->with('success', "Lesson '{$lessonTitle}' deleted successfully.");
     }
 
     /**
      * Mark lesson as completed for the authenticated user.
      */
-    public function markAsComplete(Request $request, $id)
+    public function markAsComplete(MarkLessonCompleteRequest $request, string $id)
     {
         $lesson = Lesson::findOrFail($id);
         
-        // Assuming you have a lesson_user pivot table for tracking completion
-        auth()->user()->completedLessons()->syncWithoutDetaching([$lesson->id]);
+        $this->lessonService->markLessonAsCompleted(auth()->user(), $lesson->id);
         
-        return back()->with('success', 'Lesson marked as complete!');
+        // Check if this was the last lesson
+        $nextLesson = $this->lessonService->getNextIncompleteLesson(auth()->user(), $lesson->course_id);
+        
+        $message = 'Lesson marked as complete!';
+        
+        if (!$nextLesson) {
+            $message = '🎉 Congratulations! You have completed all lessons in this course!';
+            
+            // Check if this completed the entire course
+            if ($this->hasCompletedCourse($lesson->course_id)) {
+                $message = '🎓 Amazing! You have successfully completed the entire course!';
+            }
+        }
+
+        // Get updated progress
+        $progress = $this->lessonService->getCourseProgressPercentage(auth()->user(), $lesson->course_id);
+        
+        return back()->with([
+            'success' => $message,
+            'progress' => $progress,
+            'nextLesson' => $nextLesson,
+        ]);
     }
 
     /**
      * Get lessons by course.
      */
-    public function byCourse($courseId)
+    public function byCourse(int $courseId)
     {
-        $lessons = Lesson::where('course_id', $courseId)
-            ->with('course')
-            ->orderBy('position')
-            ->paginate(10);
-            
+        $lessons = $this->lessonService->getLessonsByCourse($courseId);
         $course = Course::findOrFail($courseId);
         
-        return view('lessons.by-course', compact('lessons', 'course'));
+        $viewData = [
+            'lessons' => $lessons,
+            'course' => $course,
+            'totalLessons' => $this->getLessonCountForCourse($courseId),
+        ];
+        
+        // Add user progress data if authenticated
+        if (auth()->check()) {
+            $viewData['completedLessons'] = $this->lessonService->getUserCompletedLessonsForCourse(
+                auth()->user(), 
+                $courseId
+            );
+            $viewData['progress'] = $this->lessonService->getCourseProgressPercentage(
+                auth()->user(), 
+                $courseId
+            );
+            $viewData['completionStatus'] = $this->getLessonsCompletionStatus($lessons);
+        }
+        
+        return view('lessons.by-course', $viewData);
+    }
+
+    /**
+     * Reorder lessons (AJAX endpoint)
+     */
+    public function reorder(Request $request, int $courseId)
+    {
+        $request->validate([
+            'positions' => 'required|array',
+            'positions.*' => 'integer|min:1',
+        ]);
+
+        // This would need a method in your service to handle reordering
+        // $this->lessonService->reorderLessons($courseId, $request->positions);
+
+        return response()->json(['success' => true]);
+    }
+
+    /**
+     * Get lesson preview (AJAX endpoint)
+     */
+    public function preview(int $id)
+    {
+        $lesson = Lesson::with('course')->findOrFail($id);
+        
+        return response()->json([
+            'title' => $lesson->title,
+            'content' => $lesson->content,
+            'video_url' => $lesson->video_url,
+            'course' => $lesson->course->title,
+        ]);
     }
 }
