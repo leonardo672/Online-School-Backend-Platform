@@ -321,117 +321,154 @@
       }
     }
     
-    password.addEventListener('input', validatePassword);
-    confirmPassword.addEventListener('input', validatePassword);
+    if (password && confirmPassword) {
+      password.addEventListener('input', validatePassword);
+      confirmPassword.addEventListener('input', validatePassword);
+    }
     
     // Email validation
     const emailInput = document.getElementById('email');
-    emailInput.addEventListener('blur', function() {
-      const email = this.value;
-      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-      
-      if (email && !emailRegex.test(email)) {
-        this.classList.add('is-invalid');
-        this.setCustomValidity('Please enter a valid email address');
-      } else {
-        this.classList.remove('is-invalid');
-        this.setCustomValidity('');
-      }
-    });
+    if (emailInput) {
+      emailInput.addEventListener('blur', function() {
+        const email = this.value;
+        const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+        
+        if (email && !emailRegex.test(email)) {
+          this.classList.add('is-invalid');
+          this.setCustomValidity('Please enter a valid email address');
+        } else {
+          this.classList.remove('is-invalid');
+          this.setCustomValidity('');
+        }
+      });
+    }
     
     // Email verification checkbox logic
     const emailVerifiedCheckbox = document.getElementById('email_verified');
-    const currentEmailStatus = "{{ $user->email_verified_at ? 'verified' : 'unverified' }}";
-    
-    emailVerifiedCheckbox.addEventListener('change', function() {
-      if (this.checked) {
-        if (!confirm('Are you sure you want to mark this email as verified?')) {
-          this.checked = false;
+    if (emailVerifiedCheckbox) {
+      const currentEmailStatus = "{{ $user->email_verified_at ? 'verified' : 'unverified' }}";
+      
+      emailVerifiedCheckbox.addEventListener('change', function() {
+        if (this.checked) {
+          if (!confirm('Are you sure you want to mark this email as verified?')) {
+            this.checked = false;
+          }
+        } else {
+          if (currentEmailStatus === 'verified' && !confirm('Are you sure you want to mark this email as unverified?')) {
+            this.checked = true;
+          }
         }
-      } else {
-        if (currentEmailStatus === 'verified' && !confirm('Are you sure you want to mark this email as unverified?')) {
-          this.checked = true;
-        }
-      }
-    });
+      });
+    }
     
-    // Show confirmation before leaving unsaved changes
+    // Track form changes - FIXED VERSION
     let formChanged = false;
-    const formInputs = document.querySelectorAll('form input, form select');
+    const form = document.querySelector('form');
+    const formInputs = document.querySelectorAll('form input, form select, form textarea');
     
+    // Store original values
+    const originalValues = {};
     formInputs.forEach(input => {
-      const originalValue = input.value;
+      originalValues[input.name || input.id] = input.value;
+      
       input.addEventListener('input', () => {
-        if (input.value !== originalValue) {
-          formChanged = true;
-        }
+        formChanged = true;
+      });
+      
+      input.addEventListener('change', () => {
+        formChanged = true;
       });
     });
     
+    // Reset flag when form is submitted
+    if (form) {
+      form.addEventListener('submit', function() {
+        formChanged = false; // Reset flag before form submission
+      });
+    }
+    
+    // Show confirmation before leaving unsaved changes
     window.addEventListener('beforeunload', function(e) {
       if (formChanged) {
         e.preventDefault();
-        e.returnValue = '';
+        e.returnValue = ''; // Standard way to show confirmation dialog
+        return ''; // For older browsers
       }
     });
     
     // Form submission validation
-    const form = document.querySelector('form');
-    form.addEventListener('submit', function(e) {
-      const nameInput = document.getElementById('name');
-      const emailInput = document.getElementById('email');
-      const roleSelect = document.getElementById('role');
-      const passwordInput = document.getElementById('password');
-      const confirmPasswordInput = document.getElementById('password_confirmation');
-      
-      let isValid = true;
-      
-      if (!nameInput.value.trim()) {
-        nameInput.classList.add('is-invalid');
-        isValid = false;
-      }
-      
-      if (!emailInput.value.trim()) {
-        emailInput.classList.add('is-invalid');
-        isValid = false;
-      }
-      
-      if (!roleSelect.value) {
-        roleSelect.classList.add('is-invalid');
-        isValid = false;
-      }
-      
-      // Check password confirmation if password is entered
-      if (passwordInput.value && passwordInput.value !== confirmPasswordInput.value) {
-        confirmPasswordInput.classList.add('is-invalid');
-        isValid = false;
-      }
-      
-      if (!isValid) {
-        e.preventDefault();
-        return false;
-      }
-      
-      // Confirm role change if changing from/to admin
-      const currentRole = "{{ $user->role }}";
-      const newRole = roleSelect.value;
-      
-      if (currentRole !== newRole) {
-        if (currentRole === 'admin' || newRole === 'admin') {
-          if (!confirm(`Changing role from ${currentRole} to ${newRole}. Are you sure?`)) {
-            e.preventDefault();
-            return false;
+    if (form) {
+      form.addEventListener('submit', function(e) {
+        const nameInput = document.getElementById('name');
+        const emailInput = document.getElementById('email');
+        const roleSelect = document.getElementById('role');
+        const passwordInput = document.getElementById('password');
+        const confirmPasswordInput = document.getElementById('password_confirmation');
+        
+        let isValid = true;
+        
+        // Reset invalid classes
+        document.querySelectorAll('.is-invalid').forEach(el => {
+          el.classList.remove('is-invalid');
+        });
+        
+        if (nameInput && !nameInput.value.trim()) {
+          nameInput.classList.add('is-invalid');
+          isValid = false;
+        }
+        
+        if (emailInput && !emailInput.value.trim()) {
+          emailInput.classList.add('is-invalid');
+          isValid = false;
+        }
+        
+        if (roleSelect && !roleSelect.value) {
+          roleSelect.classList.add('is-invalid');
+          isValid = false;
+        }
+        
+        // Check password confirmation if password is entered
+        if (passwordInput && passwordInput.value && 
+            confirmPasswordInput && passwordInput.value !== confirmPasswordInput.value) {
+          confirmPasswordInput.classList.add('is-invalid');
+          isValid = false;
+        }
+        
+        if (!isValid) {
+          e.preventDefault();
+          return false;
+        }
+        
+        // Confirm role change if changing from/to admin
+        const currentRole = "{{ $user->role }}";
+        const newRole = roleSelect ? roleSelect.value : currentRole;
+        
+        if (roleSelect && currentRole !== newRole) {
+          if (currentRole === 'admin' || newRole === 'admin') {
+            if (!confirm(`Changing role from ${currentRole} to ${newRole}. Are you sure?`)) {
+              e.preventDefault();
+              return false;
+            }
           }
         }
-      }
-      
-      return true;
-    });
+        
+        // Form is valid and submitted - reset changed flag
+        formChanged = false;
+        return true;
+      });
+    }
     
     // Remove invalid class on input
-    const inputs = document.querySelectorAll('input, select');
+    const inputs = document.querySelectorAll('input, select, textarea');
     inputs.forEach(input => {
       input.addEventListener('input', function() {
+        this.classList.remove('is-invalid');
+      });
+    });
+    
+    // Also remove invalid class on focus
+    inputs.forEach(input => {
+      input.addEventListener('focus', function() {
         this.classList.remove('is-invalid');
       });
     });

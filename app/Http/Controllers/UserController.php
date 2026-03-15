@@ -1,117 +1,84 @@
 <?php
-
+// app/Http/Controllers/UserController.php
 namespace App\Http\Controllers;
 
 use App\Models\User;
+use App\Services\UserService;
+use App\Services\UserNotificationService;
+use App\Http\Requests\User\StoreUserRequest;
+use App\Http\Requests\User\UpdateUserRequest;
 use Illuminate\Http\Request;
 
 class UserController extends Controller
 {
-    /**
-     * Display a listing of the users.
-     */
-    public function index()
-    {
-        $users = User::all(); // Fetch all users
-        return view('users.index', compact('users')); // Pass users data to the view
+    protected UserService $userService;
+    protected UserNotificationService $notificationService;
+
+    public function __construct(
+        UserService $userService,
+        UserNotificationService $notificationService
+    ) {
+        $this->userService = $userService;
+        $this->notificationService = $notificationService;
     }
 
-    /**
-     * Show the form for creating a new user.
-     */
+    public function index(Request $request)
+    {
+        $filters = $request->only(['role', 'search']);
+        $users = $this->userService->getPaginatedUsers(10, $filters);
+        $roles = User::ROLES;
+        
+        return view('users.index', compact('users', 'roles'));
+    }
+
     public function create()
     {
         $roles = User::ROLES;
-        return view('users.create', compact('roles')); // Return the user creation form view
+        return view('users.create', compact('roles'));
     }
 
-    /**
-     * Store a newly created user in storage.
-     */
-    public function store(Request $request)
+    public function store(StoreUserRequest $request)
     {
-        // Validate the request data
-        $request->validate([
-            'name' => 'required|string|max:255',
-            'email' => 'required|email|unique:users,email',
-            'password' => 'required|string|min:8|confirmed',
-            'role' => 'required|in:' . implode(',', User::ROLES),
-        ]);
-
-        // Create a new user
-        User::create([
-            'name' => $request->name,
-            'email' => $request->email,
-            'password' => bcrypt($request->password),
-            'role' => $request->role,
-        ]);
-
-        // Redirect to the users list with a success message
-        return redirect()->route('users.index')->with('success', 'User created successfully!');
+        $user = $this->userService->createUser($request->validated());
+        $this->notificationService->sendWelcomeEmail($user);
+        
+        return redirect()->route('users.index')
+            ->with('success', 'User created successfully!'); // Simple and clear
     }
 
-    /**
-     * Display the specified user.
-     */
     public function show(string $id)
     {
-        $user = User::findOrFail($id); // Find the user by id
-        return view('users.show', compact('user')); // Pass the user data to the view
+        $user = User::with('certificates')->findOrFail($id);
+        return view('users.show', compact('user'));
     }
 
-    /**
-     * Show the form for editing the specified user.
-     */
-    public function edit($id)
+    public function edit(string $id)
     {
-        $user = User::findOrFail($id); // Retrieve the user by ID
+        $user = $this->userService->find($id);
         $roles = User::ROLES;
-        
         return view('users.edit', compact('user', 'roles'));
     }
 
-    /**
-     * Update the specified user in storage.
-     */
-    public function update(Request $request, $id)
+    public function update(UpdateUserRequest $request, string $id)
     {
-        // Validate the request data
-        $request->validate([
-            'name' => 'required|string|max:255',
-            'email' => 'required|email|unique:users,email,' . $id,
-            'role' => 'required|in:' . implode(',', User::ROLES),
-        ]);
-
-        // Update the user
-        $user = User::findOrFail($id);
-        $updateData = [
-            'name' => $request->name,
-            'email' => $request->email,
-            'role' => $request->role,
-        ];
-
-        // Update password if provided
-        if ($request->filled('password')) {
-            $request->validate([
-                'password' => 'string|min:8|confirmed',
-            ]);
-            $updateData['password'] = bcrypt($request->password);
-        }
-
-        $user->update($updateData);
-
-        // Redirect to the users list with a success message
-        return redirect()->route('users.index')->with('success', 'User updated successfully!');
+        $user = $this->userService->updateUser($id, $request->validated());
+        
+        return redirect()->route('users.index')
+            ->with('success', 'User updated successfully!'); // Simple and clear
     }
 
-    /**
-     * Remove the specified user from storage.
-     */
     public function destroy(string $id)
     {
-        $user = User::findOrFail($id); // Find the user by id
-        $user->delete(); // Delete the user
-
-        return redirect()->route('users.index')->with('success', 'User deleted successfully.');
+        $user = $this->userService->find($id);
+        
+        if ($user->certificates()->count() > 0) {
+            return redirect()->route('users.index')
+                ->with('error', 'Cannot delete user with certificates.'); // Simple error
+        }
+        
+        $this->userService->delete($id);
+        
+        return redirect()->route('users.index')
+            ->with('success', 'User deleted successfully.'); // Simple and clear
     }
 }
