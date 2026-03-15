@@ -607,7 +607,19 @@
 
 <script>
   document.addEventListener('DOMContentLoaded', function() {
-    // Store original values for reset functionality
+    let formSubmitted = false;
+    let formChanged = false;
+    
+    // Get success status from Blade - FIXED
+    const hasSuccess = {!! session('success') ? 'true' : 'false' !!};
+    
+    // Disable warning if there was a success message
+    if (hasSuccess) {
+      formSubmitted = true;
+      formChanged = false;
+    }
+    
+    // Store original values for reset functionality - FIXED
     const originalValues = {
       user_id: '{{ $payment->user_id }}',
       course_id: '{{ $payment->course_id }}',
@@ -615,7 +627,7 @@
       status: '{{ $payment->status }}',
       payment_method: '{{ $payment->payment_method }}',
       transaction_id: '{{ $payment->transaction_id }}',
-      notes: `{!! addslashes($payment->notes ?? '') !!}`
+      notes: {!! json_encode($payment->notes ?? '') !!}
     };
     
     // Character counter for notes
@@ -623,46 +635,42 @@
     const notesCharCount = document.getElementById('notesCharCount');
     
     function updateCharCount(element, counter) {
+      if (!element || !counter) return;
       const length = element.value.length;
       counter.textContent = length;
-      
-      const max = 1000;
-      if (length > max * 0.9) {
-        counter.classList.add('danger');
-        counter.classList.remove('warning');
-      } else if (length > max * 0.75) {
-        counter.classList.add('warning');
-        counter.classList.remove('danger');
-      } else {
-        counter.classList.remove('warning', 'danger');
-      }
     }
     
-    notesInput.addEventListener('input', () => updateCharCount(notesInput, notesCharCount));
-    updateCharCount(notesInput, notesCharCount);
+    if (notesInput && notesCharCount) {
+      notesInput.addEventListener('input', function() {
+        updateCharCount(notesInput, notesCharCount);
+      });
+      updateCharCount(notesInput, notesCharCount);
+    }
     
     // Copy transaction ID to clipboard
-    function copyToClipboard(text) {
-      navigator.clipboard.writeText(text).then(() => {
+    window.copyToClipboard = function(text) {
+      navigator.clipboard.writeText(text).then(function() {
         const button = event.target.closest('button');
         const originalHtml = button.innerHTML;
         
         button.innerHTML = '<i class="fas fa-check"></i>';
         
-        setTimeout(() => {
+        setTimeout(function() {
           button.innerHTML = originalHtml;
         }, 2000);
         
         showToast('Transaction ID copied to clipboard!', 'success');
-      }).catch(err => {
+      }).catch(function(err) {
         console.error('Failed to copy: ', err);
         showToast('Failed to copy transaction ID', 'error');
       });
-    }
+    };
     
-    // Use course price for amount (UPDATED - no API call)
-    function useCoursePrice() {
+    // Use course price for amount
+    window.useCoursePrice = function() {
       const courseSelect = document.getElementById('course_id');
+      if (!courseSelect) return;
+      
       const courseId = courseSelect.value;
       
       if (!courseId) {
@@ -670,21 +678,25 @@
         return;
       }
       
-      // Get the selected option and its data-price attribute
       const selectedOption = courseSelect.options[courseSelect.selectedIndex];
       const coursePrice = selectedOption.getAttribute('data-course-price') || '0.00';
       
       const amountInput = document.getElementById('amount');
-      amountInput.value = coursePrice;
-      
-      // Update payment summary
-      updatePaymentSummary();
-    }
+      if (amountInput) {
+        amountInput.value = coursePrice;
+        formChanged = true;
+        updatePaymentSummary();
+      }
+    };
     
-    // Generate transaction ID (UPDATED - simplified)
-    function generateTransactionId() {
-      const paymentMethod = document.getElementById('payment_method').value;
+    // Generate transaction ID
+    window.generateTransactionId = function() {
+      const paymentMethodSelect = document.getElementById('payment_method');
       const transactionIdInput = document.getElementById('transaction_id');
+      
+      if (!paymentMethodSelect || !transactionIdInput) return;
+      
+      const paymentMethod = paymentMethodSelect.value;
       
       let prefix = '';
       switch(paymentMethod) {
@@ -701,24 +713,20 @@
           prefix = 'TRX-';
       }
       
-      // Generate a unique ID with timestamp and random string
       const timestamp = Date.now().toString(36);
       const randomStr = Math.random().toString(36).substring(2, 8).toUpperCase();
-      
-      // Combine prefix, timestamp, and random string
       const generatedId = prefix + timestamp + randomStr;
       
-      // Set the value
       transactionIdInput.value = generatedId;
+      formChanged = true;
       
-      // Visual feedback
       transactionIdInput.style.backgroundColor = '#d4edda';
-      setTimeout(() => {
+      setTimeout(function() {
         transactionIdInput.style.backgroundColor = '';
       }, 1000);
-    }
+    };
     
-    // Update payment summary (UPDATED - no API calls)
+    // Update payment summary
     function updatePaymentSummary() {
       const userSelect = document.getElementById('user_id');
       const courseSelect = document.getElementById('course_id');
@@ -726,37 +734,36 @@
       const statusSelect = document.getElementById('status');
       const paymentMethodSelect = document.getElementById('payment_method');
       
-      // Get user info
+      if (!userSelect || !courseSelect || !amountInput || !statusSelect || !paymentMethodSelect) return;
+      
       let userName = 'Not selected';
       if (userSelect.value) {
         const selectedOption = userSelect.options[userSelect.selectedIndex];
         userName = selectedOption.text.split(' (')[0] || 'Unknown User';
       }
       
-      // Get course info
       let courseTitle = 'Not selected';
       if (courseSelect.value) {
         const selectedOption = courseSelect.options[courseSelect.selectedIndex];
         courseTitle = selectedOption.text.split(' ($')[0] || 'Unknown Course';
       }
       
-      // Get amount
       const amountValue = parseFloat(amountInput.value) || 0;
-      
-      // Get status
       const status = statusSelect.value;
       const statusText = status.charAt(0).toUpperCase() + status.slice(1);
       
-      // Get payment method
-      const paymentMethod = paymentMethodSelect.value;
+      const summaryUser = document.getElementById('summaryUser');
+      const summaryCourse = document.getElementById('summaryCourse');
+      const summaryAmount = document.getElementById('summaryAmount');
+      const summaryTotal = document.getElementById('summaryTotal');
+      const summaryStatus = document.getElementById('summaryStatus');
+      const futureStatus = document.getElementById('futureStatus');
       
-      // Update the summary display
-      document.getElementById('summaryUser').textContent = userName;
-      document.getElementById('summaryCourse').textContent = courseTitle;
-      document.getElementById('summaryAmount').textContent = '$' + amountValue.toFixed(2);
-      document.getElementById('summaryTotal').textContent = '$' + amountValue.toFixed(2);
+      if (summaryUser) summaryUser.textContent = userName;
+      if (summaryCourse) summaryCourse.textContent = courseTitle;
+      if (summaryAmount) summaryAmount.textContent = '$' + amountValue.toFixed(2);
+      if (summaryTotal) summaryTotal.textContent = '$' + amountValue.toFixed(2);
       
-      // Update status badges
       const statusColors = {
         'completed': 'success',
         'pending': 'warning',
@@ -764,162 +771,163 @@
         'refunded': 'info'
       };
       
-      const statusBadge = document.getElementById('summaryStatus');
-      const futureStatusBadge = document.getElementById('futureStatus');
+      if (summaryStatus) {
+        summaryStatus.textContent = statusText;
+        summaryStatus.className = 'badge bg-' + (statusColors[status] || 'secondary');
+      }
       
-      statusBadge.textContent = statusText;
-      statusBadge.className = 'badge bg-' + (statusColors[status] || 'secondary');
+      if (futureStatus) {
+        futureStatus.textContent = statusText;
+        futureStatus.className = 'badge bg-' + (statusColors[status] || 'secondary');
+      }
       
-      futureStatusBadge.textContent = statusText;
-      futureStatusBadge.className = 'badge bg-' + (statusColors[status] || 'secondary');
-      
-      // Update transaction ID help text based on payment method
+      // Update transaction ID help text
       const transactionIdHelp = document.getElementById('transactionIdHelp');
-      switch(paymentMethod) {
-        case 'stripe':
-          transactionIdHelp.textContent = 'Stripe charge ID (e.g., ch_...)';
-          break;
-        case 'paypal':
-          transactionIdHelp.textContent = 'PayPal transaction ID';
-          break;
-        case 'manual':
-          transactionIdHelp.textContent = 'Manual payment reference';
-          break;
-        default:
-          transactionIdHelp.textContent = 'External transaction reference';
+      if (transactionIdHelp) {
+        switch(paymentMethodSelect.value) {
+          case 'stripe':
+            transactionIdHelp.textContent = 'Stripe charge ID (e.g., ch_...)';
+            break;
+          case 'paypal':
+            transactionIdHelp.textContent = 'PayPal transaction ID';
+            break;
+          case 'manual':
+            transactionIdHelp.textContent = 'Manual payment reference';
+            break;
+          default:
+            transactionIdHelp.textContent = 'External transaction reference';
+        }
       }
     }
     
     // Show status change warning
-    function showStatusChangeWarning() {
-      const newStatus = document.getElementById('status').value;
-      const originalStatus = '{{ $payment->status }}';
+    window.showStatusChangeWarning = function() {
+      const statusSelect = document.getElementById('status');
       const statusChangeWarning = document.getElementById('statusChangeWarning');
+      
+      if (!statusSelect || !statusChangeWarning) return;
+      
+      const newStatus = statusSelect.value;
+      const originalStatus = '{{ $payment->status }}';
       
       if (newStatus !== originalStatus) {
         statusChangeWarning.classList.remove('d-none');
+        formChanged = true;
       } else {
         statusChangeWarning.classList.add('d-none');
       }
       
       updatePaymentSummary();
-    }
+    };
     
     // Reset form to original values
-    function resetToOriginal() {
+    window.resetToOriginal = function() {
       if (confirm('Are you sure you want to reset all changes to the original values?')) {
-        document.getElementById('user_id').value = originalValues.user_id;
-        document.getElementById('course_id').value = originalValues.course_id;
-        document.getElementById('amount').value = originalValues.amount;
-        document.getElementById('status').value = originalValues.status;
-        document.getElementById('payment_method').value = originalValues.payment_method;
-        document.getElementById('transaction_id').value = originalValues.transaction_id;
-        notesInput.value = originalValues.notes.replace(/\\'/g, "'");
+        const userId = document.getElementById('user_id');
+        const courseId = document.getElementById('course_id');
+        const amount = document.getElementById('amount');
+        const status = document.getElementById('status');
+        const paymentMethod = document.getElementById('payment_method');
+        const transactionId = document.getElementById('transaction_id');
         
-        // Reset character count
-        updateCharCount(notesInput, notesCharCount);
+        if (userId) userId.value = originalValues.user_id;
+        if (courseId) courseId.value = originalValues.course_id;
+        if (amount) amount.value = originalValues.amount;
+        if (status) status.value = originalValues.status;
+        if (paymentMethod) paymentMethod.value = originalValues.payment_method;
+        if (transactionId) transactionId.value = originalValues.transaction_id;
+        if (notesInput) notesInput.value = originalValues.notes;
         
-        // Hide warnings
-        document.getElementById('statusChangeWarning').classList.add('d-none');
+        if (notesInput && notesCharCount) updateCharCount(notesInput, notesCharCount);
         
-        // Update summary
+        const statusChangeWarning = document.getElementById('statusChangeWarning');
+        if (statusChangeWarning) statusChangeWarning.classList.add('d-none');
+        
+        formChanged = false;
         updatePaymentSummary();
         
-        // Show success message
-        const successAlert = document.createElement('div');
-        successAlert.className = 'alert alert-success mt-3';
-        successAlert.innerHTML = '<i class="fas fa-check-circle"></i> All changes reset to original values';
-        document.querySelector('.card-body').insertBefore(successAlert, document.querySelector('form'));
-        
-        setTimeout(() => successAlert.remove(), 3000);
+        showToast('All changes reset to original values', 'success');
       }
-    }
+    };
     
     // Form validation
     const form = document.getElementById('paymentForm');
-    form.addEventListener('submit', function(e) {
-      const userId = document.getElementById('user_id').value;
-      const courseId = document.getElementById('course_id').value;
-      const amount = document.getElementById('amount').value;
-      const status = document.getElementById('status').value;
-      const paymentMethod = document.getElementById('payment_method').value;
-      const transactionId = document.getElementById('transaction_id').value;
-      
-      let isValid = true;
-      
-      if (!userId) {
-        document.getElementById('user_id').classList.add('is-invalid');
-        isValid = false;
+    
+    if (form) {
+      const submitBtn = form.querySelector('button[type="submit"]');
+      if (submitBtn) {
+        submitBtn.addEventListener('click', function() {
+          formSubmitted = true;
+        });
       }
       
-      if (!courseId) {
-        document.getElementById('course_id').classList.add('is-invalid');
-        isValid = false;
-      }
-      
-      if (!amount || parseFloat(amount) <= 0) {
-        document.getElementById('amount').classList.add('is-invalid');
-        isValid = false;
-      }
-      
-      // Warn about status changes
-      const originalStatus = '{{ $payment->status }}';
-      const newStatus = status;
-      if (originalStatus !== newStatus) {
-        if (!confirm(`Changing payment status from "${originalStatus}" to "${newStatus}". Continue?`)) {
+      form.addEventListener('submit', function(e) {
+        const userId = document.getElementById('user_id');
+        const courseId = document.getElementById('course_id');
+        const amount = document.getElementById('amount');
+        const status = document.getElementById('status');
+        
+        let isValid = true;
+        
+        if (!userId || !userId.value) {
+          if (userId) userId.classList.add('is-invalid');
+          isValid = false;
+        }
+        
+        if (!courseId || !courseId.value) {
+          if (courseId) courseId.classList.add('is-invalid');
+          isValid = false;
+        }
+        
+        if (!amount || !amount.value || parseFloat(amount.value) <= 0) {
+          if (amount) amount.classList.add('is-invalid');
+          isValid = false;
+        }
+        
+        if (status) {
+          const originalStatus = '{{ $payment->status }}';
+          if (originalStatus !== status.value) {
+            if (!confirm('Changing payment status from "' + originalStatus + '" to "' + status.value + '". Continue?')) {
+              e.preventDefault();
+              return false;
+            }
+          }
+        }
+        
+        if (!isValid) {
           e.preventDefault();
+          showToast('Please fill in all required fields marked with *', 'error');
+          window.scrollTo({ top: 0, behavior: 'smooth' });
           return false;
         }
-      }
+        
+        formSubmitted = true;
+        return true;
+      });
       
-      if (!isValid) {
-        e.preventDefault();
+      const inputs = form.querySelectorAll('input, select, textarea');
+      inputs.forEach(function(input) {
+        const originalValue = input.value;
         
-        // Show error message
-        const errorDiv = document.createElement('div');
-        errorDiv.className = 'alert alert-danger mt-3';
-        errorDiv.innerHTML = '<strong>Error!</strong> Please fill in all required fields marked with *';
-        form.prepend(errorDiv);
+        input.addEventListener('input', function() {
+          this.classList.remove('is-invalid');
+          if (this.value !== originalValue) formChanged = true;
+        });
         
-        // Scroll to top
-        window.scrollTo({ top: 0, behavior: 'smooth' });
-        
-        return false;
-      }
-      
-      return true;
-    });
-    
-    // Remove invalid class on input
-    const inputs = document.querySelectorAll('input, select, textarea');
-    inputs.forEach(input => {
-      input.addEventListener('input', function() {
-        this.classList.remove('is-invalid');
+        input.addEventListener('change', function() {
+          this.classList.remove('is-invalid');
+          if (this.value !== originalValue) formChanged = true;
+          updatePaymentSummary();
+        });
       });
-      input.addEventListener('change', function() {
-        this.classList.remove('is-invalid');
-      });
-    });
+    }
     
-    // Warn about unsaved changes
-    let formChanged = false;
-    const formInputs = form.querySelectorAll('input, select, textarea');
-    
-    formInputs.forEach(input => {
-      const originalValue = input.value;
-      input.addEventListener('input', () => {
-        formChanged = input.value !== originalValue;
-      });
-      input.addEventListener('change', () => {
-        formChanged = input.value !== originalValue;
-        updatePaymentSummary();
-      });
-    });
-    
+    // Before unload warning
     window.addEventListener('beforeunload', function(e) {
-      if (formChanged) {
+      if (formChanged && !formSubmitted) {
         e.preventDefault();
         e.returnValue = 'You have unsaved changes. Are you sure you want to leave?';
+        return e.returnValue;
       }
     });
     
@@ -928,20 +936,28 @@
   });
   
   // Show toast notification
-  function showToast(message, type = 'info') {
+  function showToast(message, type) {
     const toast = document.createElement('div');
-    toast.className = `alert alert-${type} position-fixed top-0 end-0 m-3`;
+    toast.className = 'alert alert-' + type + ' position-fixed top-0 end-0 m-3';
     toast.style.zIndex = '9999';
+    
+    let icon = 'fa-info-circle';
+    if (type === 'success') icon = 'fa-check-circle';
+    if (type === 'error') icon = 'fa-times-circle';
+    
     toast.innerHTML = `
       <div class="d-flex align-items-center">
-        <i class="fas ${type === 'success' ? 'fa-check-circle' : type === 'error' ? 'fa-times-circle' : 'fa-info-circle'} me-2"></i>
+        <i class="fas ${icon} me-2"></i>
         <span>${message}</span>
       </div>
     `;
+    
     document.body.appendChild(toast);
     
-    setTimeout(() => toast.remove(), 3000);
+    setTimeout(function() {
+      toast.remove();
+    }, 3000);
   }
-</script>
 
+</script>
 @stop
