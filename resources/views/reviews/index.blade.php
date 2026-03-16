@@ -96,7 +96,7 @@
             <div class="col-md-3">
                 <div class="stat-card bg-primary text-white p-3 rounded">
                     <h6 class="mb-1">Total Reviews</h6>
-                    <h3 class="mb-0">{{ $reviewsCount }}</h3>
+                    <h3 class="mb-0">{{ $stats['counts']['total'] ?? 0 }}</h3>
                 </div>
             </div>
             <div class="col-md-3">
