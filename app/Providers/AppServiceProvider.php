@@ -10,6 +10,12 @@ use App\Models\User;
 use App\Services\UserService;
 use App\Services\UserNotificationService;
 
+// Review Services
+use App\Services\Review\ReviewQueryService;
+use App\Services\Review\ReviewStatisticsService;
+use App\Services\Review\ReviewValidationService;
+use App\Services\Review\ReviewExportService;
+
 class AppServiceProvider extends ServiceProvider
 {
     /**
@@ -33,6 +39,23 @@ class AppServiceProvider extends ServiceProvider
 
         $this->app->singleton(PaymentDataService::class, function ($app) {
             return new PaymentDataService();
+        });
+
+        // Register Review Services
+        $this->app->singleton(ReviewQueryService::class, function ($app) {
+            return new ReviewQueryService();
+        });
+
+        $this->app->singleton(ReviewStatisticsService::class, function ($app) {
+            return new ReviewStatisticsService();
+        });
+
+        $this->app->singleton(ReviewValidationService::class, function ($app) {
+            return new ReviewValidationService();
+        });
+
+        $this->app->singleton(ReviewExportService::class, function ($app) {
+            return new ReviewExportService();
         });
     }
 
