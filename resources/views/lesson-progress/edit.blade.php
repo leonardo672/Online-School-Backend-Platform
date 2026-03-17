@@ -1,862 +1,939 @@
 @extends('layout')
-@section('content')
 
-<div class="card">
-  <div class="card-header">
-    <h4 class="card-title">
-      <i class="fas fa-edit"></i> Edit Progress Record
-    </h4>
-  </div>
-  <div class="card-body">
-    
-    <!-- Display validation errors -->
-    @if ($errors->any())
-      <div class="alert alert-danger alert-school">
-          <strong>Whoops!</strong> There were some problems with your input.<br><br>
-          <ul>
-              @foreach ($errors->all() as $error)
-                  <li>{{ $error }}</li>
-              @endforeach
-          </ul>
-      </div>
-    @endif
+@section('title', 'Edit Lesson Progress')
 
-    <!-- Success message -->
-    @if(session('success'))
-      <div class="alert alert-success alert-school">
-        <i class="fas fa-check-circle"></i> {{ session('success') }}
-      </div>
-    @endif
-
-    <form action="{{ url('lesson-progress/' . $progress->id) }}" method="post" id="progressForm">
-      @csrf
-      @method('PUT')
-      
-      <!-- Current Information -->
-      <div class="row mb-4">
-        <div class="col-md-6">
-          <div class="card bg-light">
-            <div class="card-body">
-              <h6><i class="fas fa-user-graduate"></i> Current Information</h6>
-              <div class="row">
-                <div class="col-6">
-                  <p class="mb-1"><strong>User:</strong></p>
-                  <p class="mb-1"><strong>Lesson:</strong></p>
-                  <p class="mb-1"><strong>Course:</strong></p>
-                  <p class="mb-0"><strong>Status:</strong></p>
-                </div>
-                <div class="col-6">
-                  <p class="mb-1">{{ $progress->user->name ?? 'N/A' }}</p>
-                  <p class="mb-1">{{ $progress->lesson->title ?? 'N/A' }}</p>
-                  <p class="mb-1">{{ $progress->lesson->course->title ?? 'N/A' }}</p>
-                  <p class="mb-0">
-                    @if($progress->completed)
-                      <span class="badge bg-success"><i class="fas fa-check-circle"></i> Completed</span>
-                    @else
-                      <span class="badge bg-secondary"><i class="fas fa-clock"></i> In Progress</span>
-                    @endif
-                  </p>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-        
-        <div class="col-md-6">
-          <div class="card bg-light">
-            <div class="card-body">
-              <h6><i class="fas fa-history"></i> Timeline</h6>
-              <div class="row">
-                <div class="col-6">
-                  <p class="mb-1"><strong>Created:</strong></p>
-                  <p class="mb-1"><strong>Updated:</strong></p>
-                  @if($progress->completed_at)
-                  <p class="mb-0"><strong>Completed:</strong></p>
-                  @endif
-                </div>
-                <div class="col-6">
-                  <p class="mb-1">{{ $progress->created_at->format('M d, Y h:i A') }}</p>
-                  <p class="mb-1">{{ $progress->updated_at->format('M d, Y h:i A') }}</p>
-                  @if($progress->completed_at)
-                  <p class="mb-0">{{ $progress->completed_at->format('M d, Y h:i A') }}</p>
-                  @endif
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <!-- Editable Fields -->
-      <div class="row">
-        <div class="col-md-6 mb-3">
-          <label for="user_id" class="form-label">User *</label>
-          <select name="user_id" id="user_id" class="form-select" required onchange="checkForDuplicate()">
-            <option value="">Select User</option>
-            @foreach($users ?? [] as $user)
-              <option value="{{ $user->id }}" {{ old('user_id', $progress->user_id) == $user->id ? 'selected' : '' }}>
-                {{ $user->name }} ({{ $user->email }})
-              </option>
-            @endforeach
-          </select>
-          @if(empty($users))
-            <div class="alert alert-warning mt-2">
-              <i class="fas fa-exclamation-triangle"></i> No users found.
-            </div>
-          @endif
-          <div class="form-text">Select the user for this progress record</div>
-        </div>
-
-        <div class="col-md-6 mb-3">
-          <label for="lesson_id" class="form-label">Lesson *</label>
-          <select name="lesson_id" id="lesson_id" class="form-select" required onchange="checkForDuplicate()">
-            <option value="">Select Lesson</option>
-            @foreach($lessons ?? [] as $lesson)
-              <option value="{{ $lesson->id }}" {{ old('lesson_id', $progress->lesson_id) == $lesson->id ? 'selected' : '' }}>
-                {{ $lesson->title }} ({{ $lesson->course->title ?? 'No Course' }})
-              </option>
-            @endforeach
-          </select>
-          @if(empty($lessons))
-            <div class="alert alert-warning mt-2">
-              <i class="fas fa-exclamation-triangle"></i> No lessons found.
-            </div>
-          @endif
-          <div class="form-text">Select the lesson for this progress record</div>
-        </div>
-      </div>
-
-      <div class="row">
-        <div class="col-md-6 mb-3">
-          <label for="completed" class="form-label">Progress Status</label>
-          <div class="form-check form-switch">
-            <input class="form-check-input" type="checkbox" name="completed" id="completed" 
-                   value="1" {{ old('completed', $progress->completed) ? 'checked' : '' }} 
-                   onchange="toggleCompletionDate()">
-            <label class="form-check-label" for="completed">
-              Mark as completed
-            </label>
-          </div>
-          <div class="form-text">
-            Toggle to mark this lesson as completed for the selected user
-          </div>
-        </div>
-
-        <div class="col-md-6 mb-3">
-          <label for="completed_at" class="form-label">Completion Date & Time</label>
-          <input type="datetime-local" name="completed_at" id="completed_at" class="form-control" 
-                 value="{{ old('completed_at', $progress->completed_at ? $progress->completed_at->format('Y-m-d\TH:i') : '') }}">
-          <div class="form-text">
-            Date and time when the lesson was completed.
-            <button type="button" class="btn btn-sm btn-outline-secondary mt-1" onclick="setNow()">
-              <i class="fas fa-clock"></i> Set to Now
-            </button>
-            <button type="button" class="btn btn-sm btn-outline-secondary mt-1 ms-1" onclick="clearCompletionDate()">
-              <i class="fas fa-times"></i> Clear
-            </button>
-          </div>
-        </div>
-      </div>
-
-      <!-- Progress Statistics -->
-      <div class="row mb-4">
-        <div class="col-md-6">
-          <div class="card bg-light">
-            <div class="card-body">
-              <h6><i class="fas fa-chart-line"></i> User Progress Statistics</h6>
-              <div id="userStats">
-                <div class="spinner-border spinner-border-sm text-primary"></div> Loading user stats...
-              </div>
-            </div>
-          </div>
-        </div>
-        
-        <div class="col-md-6">
-          <div class="card bg-light">
-            <div class="card-body">
-              <h6><i class="fas fa-book"></i> Lesson Progress Statistics</h6>
-              <div id="lessonStats">
-                <div class="spinner-border spinner-border-sm text-primary"></div> Loading lesson stats...
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <!-- Progress Visualization -->
-      <div class="mb-3">
-        <div class="card bg-light">
-          <div class="card-body">
-            <h6><i class="fas fa-chart-bar"></i> Progress Visualization</h6>
-            <div id="progressVisualization" class="py-3">
-              <div class="row">
-                <div class="col-md-6">
-                  <div class="progress-container mb-3">
-                    <div class="progress-label">
-                      <span>User Overall Progress</span>
-                      <span id="userProgressPercent">0%</span>
-                    </div>
-                    <div class="progress">
-                      <div class="progress-bar" id="userProgressBar" role="progressbar" style="width: 0%"></div>
-                    </div>
-                  </div>
-                </div>
-                <div class="col-md-6">
-                  <div class="progress-container mb-3">
-                    <div class="progress-label">
-                      <span>Lesson Completion Rate</span>
-                      <span id="lessonProgressPercent">0%</span>
-                    </div>
-                    <div class="progress">
-                      <div class="progress-bar" id="lessonProgressBar" role="progressbar" style="width: 0%"></div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <!-- Notes Section -->
-      <div class="mb-3">
-        <label for="notes" class="form-label">Notes (Optional)</label>
-        <textarea name="notes" id="notes" class="form-control" rows="3" 
-                  placeholder="Any additional notes about this progress record">{{ old('notes', $progress->notes) }}</textarea>
-        <div class="form-text">Optional notes about the progress record</div>
-        <div class="char-counter">
-          <span id="notesCharCount">0</span>/500 characters
-        </div>
-      </div>
-
-      <!-- Warning for duplicate progress -->
-      <div class="alert alert-warning d-none" id="duplicateWarning">
-        <i class="fas fa-exclamation-triangle"></i> 
-        <strong>Warning:</strong> Another progress record exists for this user and lesson combination.
-        <div class="mt-2">
-          <a href="#" id="duplicateLink" class="btn btn-sm btn-outline-warning">
-            <i class="fas fa-external-link-alt"></i> View Existing Record
-          </a>
-        </div>
-      </div>
-
-      <!-- Confirmation for status change -->
-      <div class="alert alert-info d-none" id="statusChangeWarning">
-        <i class="fas fa-info-circle"></i> 
-        <strong>Note:</strong> Changing the completion status will update the progress statistics.
-      </div>
-
-      <div class="d-flex justify-content-between mt-4">
-        <div>
-          <a href="{{ url('lesson-progress') }}" class="btn btn-secondary">
-            <i class="fas fa-arrow-left"></i> Back to Progress
-          </a>
-          <a href="{{ url('lesson-progress/' . $progress->id) }}" class="btn btn-view ms-2">
-            <i class="fas fa-eye"></i> View Record
-          </a>
-        </div>
-        <div>
-          <button type="button" class="btn btn-outline-secondary me-2" onclick="resetToOriginal()">
-            <i class="fas fa-history"></i> Reset Changes
-          </button>
-          <button type="submit" class="btn btn-update">
-            <i class="fas fa-save"></i> Update Progress
-          </button>
-        </div>
-      </div>
-    </form>
-   
-  </div>
-</div>
 
 <style>
-  .card {
-    border: none;
-    box-shadow: 0 4px 20px rgba(0,0,0,0.1);
-    border-radius: 12px;
-    overflow: hidden;
-    max-width: 1000px;
-    margin: 0 auto;
-  }
-  
-  .card-header {
-    background: linear-gradient(145deg, #9b59b6, #8e44ad);
-    color: white;
-    padding: 20px;
-    border-bottom: none;
-  }
-  
-  .card-title {
-    margin: 0;
-    font-weight: 600;
-    font-size: 1.5rem;
-  }
-  
-  .card-body {
-    padding: 30px;
-  }
-  
-  .form-control:focus, .form-select:focus {
-    border-color: #9b59b6;
-    box-shadow: 0 0 0 0.25rem rgba(155, 89, 182, 0.25);
-  }
-  
-  .btn-update {
-    background: linear-gradient(145deg, #f39c12, #e67e22);
-    color: white;
-    border: none;
-    padding: 10px 25px;
-    border-radius: 8px;
-    font-weight: 500;
-    transition: all 0.3s ease;
-  }
-  
-  .btn-update:hover {
-    background: linear-gradient(145deg, #e67e22, #d35400);
-    transform: translateY(-2px);
-    box-shadow: 0 5px 15px rgba(243, 156, 18, 0.3);
-    color: white;
-  }
-  
-  .btn-secondary {
-    background: linear-gradient(145deg, #6c757d, #495057);
-    color: white;
-    border: none;
-  }
-  
-  .btn-secondary:hover {
-    background: linear-gradient(145deg, #495057, #343a40);
-    color: white;
-  }
-  
-  .btn-view {
-    background: linear-gradient(145deg, #3498db, #2980b9);
-    color: white;
-    border: none;
-  }
-  
-  .btn-view:hover {
-    background: linear-gradient(145deg, #2980b9, #1c5a7a);
-    color: white;
-  }
-  
-  .form-check-input:checked {
-    background-color: #9b59b6;
-    border-color: #9b59b6;
-  }
-  
-  .form-switch .form-check-input {
-    width: 3em;
-    height: 1.5em;
-  }
-  
-  .alert-school {
-    border-left: 4px solid #9b59b6;
-    background-color: #f8f9fa;
-  }
-  
-  .alert-success {
-    background-color: #d1ecf1;
-    border-color: #bee5eb;
-    color: #0c5460;
-  }
-  
-  .alert-warning {
-    background-color: #fff3cd;
-    border-color: #ffecb5;
-    color: #664d03;
-  }
-  
-  .alert-info {
-    background-color: #d1ecf1;
-    border-color: #bee5eb;
-    color: #0c5460;
-  }
-  
-  .char-counter {
-    font-size: 0.875rem;
-    color: #6c757d;
-    text-align: right;
-    margin-top: 5px;
-  }
-  
-  .char-counter.warning {
-    color: #ffc107;
-  }
-  
-  .char-counter.danger {
-    color: #dc3545;
-  }
-  
-  .bg-light {
-    background-color: #f8f9fa !important;
-  }
-  
-  /* Progress bar styling */
-  .progress-container {
-    margin: 10px 0;
-  }
-  
-  .progress {
-    height: 20px;
-    border-radius: 10px;
-    background-color: #e9ecef;
-  }
-  
-  .progress-bar {
-    background: linear-gradient(145deg, #9b59b6, #8e44ad);
-    border-radius: 10px;
-    transition: width 1s ease-in-out;
-  }
-  
-  .progress-label {
-    display: flex;
-    justify-content: space-between;
-    margin-bottom: 5px;
-    font-size: 14px;
-  }
-  
-  .stat-card {
-    padding: 8px;
-    border-radius: 6px;
-    text-align: center;
-    background-color: white;
-    border: 1px solid #e9ecef;
-    margin: 5px 0;
-  }
-  
-  .stat-number {
-    font-size: 20px;
-    font-weight: 700;
-    color: #9b59b6;
-  }
-  
-  .stat-label {
-    font-size: 11px;
-    color: #6c757d;
-    text-transform: uppercase;
-  }
-  
-  /* Badge styling */
-  .badge {
-    padding: 6px 12px;
-    border-radius: 20px;
-    font-weight: 500;
-  }
-  
-  /* Timeline styling */
-  .timeline-item {
-    margin-bottom: 10px;
-  }
+    .form-container {
+        max-width: 800px;
+        margin: 0 auto;
+        background: white;
+        border-radius: 10px;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        padding: 2rem;
+    }
+
+    .form-header {
+        border-bottom: 2px solid #f0f0f0;
+        padding-bottom: 1rem;
+        margin-bottom: 2rem;
+    }
+
+    .form-header h2 {
+        color: #333;
+        font-weight: 600;
+    }
+
+    .form-header p {
+        color: #666;
+        margin-bottom: 0;
+    }
+
+    .form-label {
+        font-weight: 500;
+        color: #495057;
+        margin-bottom: 0.5rem;
+    }
+
+    .form-control, .form-select {
+        border-radius: 8px;
+        border: 1px solid #dee2e6;
+        padding: 0.6rem 1rem;
+        transition: all 0.2s;
+    }
+
+    .form-control:focus, .form-select:focus {
+        border-color: #80bdff;
+        box-shadow: 0 0 0 0.2rem rgba(0,123,255,0.15);
+    }
+
+    .btn-update {
+        background: linear-gradient(45deg, #28a745, #20c997);
+        border: none;
+        border-radius: 8px;
+        padding: 0.6rem 2rem;
+        font-weight: 500;
+        transition: all 0.2s;
+    }
+
+    .btn-update:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 4px 8px rgba(40,167,69,0.3);
+    }
+
+    .btn-cancel {
+        border-radius: 8px;
+        padding: 0.6rem 2rem;
+        font-weight: 500;
+        margin-left: 1rem;
+    }
+
+    .btn-danger {
+        border-radius: 8px;
+        padding: 0.6rem 2rem;
+        font-weight: 500;
+    }
+
+    .current-status {
+        background: #f8f9fa;
+        border-radius: 8px;
+        padding: 1rem;
+        margin-bottom: 1.5rem;
+        border-left: 4px solid;
+    }
+
+    .current-status.completed {
+        border-left-color: #28a745;
+    }
+
+    .current-status.in-progress {
+        border-left-color: #ffc107;
+    }
+
+    .status-badge {
+        display: inline-block;
+        padding: 0.5rem 1rem;
+        border-radius: 20px;
+        font-weight: 500;
+        font-size: 0.9rem;
+    }
+
+    .status-badge.completed {
+        background: linear-gradient(45deg, #28a745, #20c997);
+        color: white;
+    }
+
+    .status-badge.in-progress {
+        background: linear-gradient(45deg, #ffc107, #fd7e14);
+        color: white;
+    }
+
+    .completion-info {
+        background: #e8f4f8;
+        border-radius: 8px;
+        padding: 1rem;
+        margin-top: 1rem;
+        border-left: 4px solid #17a2b8;
+    }
+
+    .loading-overlay {
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background: rgba(255,255,255,0.8);
+        display: none;
+        align-items: center;
+        justify-content: center;
+        z-index: 9999;
+    }
+
+    .loading-spinner {
+        width: 50px;
+        height: 50px;
+        border: 4px solid #f3f3f3;
+        border-top: 4px solid #007bff;
+        border-radius: 50%;
+        animation: spin 1s linear infinite;
+    }
+
+    @keyframes spin {
+        0% { transform: rotate(0deg); }
+        100% { transform: rotate(360deg); }
+    }
+
+    .duplicate-warning {
+        background-color: #fff3cd;
+        border: 1px solid #ffeeba;
+        color: #856404;
+        padding: 0.75rem 1.25rem;
+        border-radius: 8px;
+        margin-top: 0.5rem;
+        display: none;
+    }
+
+    .duplicate-warning.show {
+        display: block;
+    }
+
+    .toast-notification {
+        position: fixed;
+        top: 20px;
+        right: 20px;
+        min-width: 300px;
+        padding: 1rem;
+        border-radius: 10px;
+        box-shadow: 0 5px 15px rgba(0,0,0,0.2);
+        z-index: 10000;
+        animation: slideInRight 0.3s ease;
+    }
+
+    @keyframes slideInRight {
+        from {
+            transform: translateX(100%);
+            opacity: 0;
+        }
+        to {
+            transform: translateX(0);
+            opacity: 1;
+        }
+    }
+
+    .toast-success {
+        background: linear-gradient(45deg, #28a745, #20c997);
+        color: white;
+    }
+
+    .toast-error {
+        background: linear-gradient(45deg, #dc3545, #c82333);
+        color: white;
+    }
+
+    .toast-warning {
+        background: linear-gradient(45deg, #ffc107, #fd7e14);
+        color: white;
+    }
+
+    .toast-info {
+        background: linear-gradient(45deg, #17a2b8, #138496);
+        color: white;
+    }
+
+    .preview-card {
+        background: #f8f9fa;
+        border-radius: 8px;
+        padding: 1rem;
+        margin-top: 1rem;
+        display: none;
+    }
+
+    .preview-card.show {
+        display: block;
+    }
+
+    .preview-item {
+        display: flex;
+        align-items: center;
+        padding: 0.5rem 0;
+        border-bottom: 1px solid #dee2e6;
+    }
+
+    .preview-item:last-child {
+        border-bottom: none;
+    }
+
+    .preview-label {
+        font-weight: 600;
+        width: 120px;
+        color: #495057;
+    }
+
+    .preview-value {
+        color: #212529;
+    }
+
+    .history-timeline {
+        margin-top: 2rem;
+        padding: 1rem;
+        background: #f8f9fa;
+        border-radius: 8px;
+    }
+
+    .timeline-item {
+        display: flex;
+        align-items: flex-start;
+        padding: 1rem 0;
+        border-bottom: 1px dashed #dee2e6;
+    }
+
+    .timeline-item:last-child {
+        border-bottom: none;
+    }
+
+    .timeline-icon {
+        width: 36px;
+        height: 36px;
+        border-radius: 50%;
+        background: white;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        margin-right: 1rem;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    }
+
+    .timeline-content {
+        flex: 1;
+    }
+
+    .timeline-title {
+        font-weight: 600;
+        margin-bottom: 0.25rem;
+    }
+
+    .timeline-time {
+        font-size: 0.85rem;
+        color: #6c757d;
+    }
+
+    .delete-modal .modal-content {
+        border-radius: 10px;
+        border: none;
+    }
+
+    .delete-modal .modal-header {
+        background: linear-gradient(45deg, #dc3545, #c82333);
+        color: white;
+        border-radius: 10px 10px 0 0;
+    }
+
+    .delete-modal .btn-delete-confirm {
+        background: linear-gradient(45deg, #dc3545, #c82333);
+        border: none;
+        border-radius: 8px;
+        padding: 0.6rem 2rem;
+    }
+
+    .delete-modal .btn-delete-confirm:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 4px 8px rgba(220,53,69,0.3);
+    }
 </style>
 
-<script>
-  document.addEventListener('DOMContentLoaded', function() {
-    // Store original values for reset functionality
-    const originalValues = {
-      user_id: '{{ $progress->user_id }}',
-      lesson_id: '{{ $progress->lesson_id }}',
-      completed: {{ $progress->completed ? 'true' : 'false' }},
-      completed_at: '{{ $progress->completed_at ? $progress->completed_at->format("Y-m-d\\TH:i") : "" }}',
-      notes: `{!! addslashes($progress->notes ?? '') !!}`
-    };
-    
-    // Character counter for notes
-    const notesInput = document.getElementById('notes');
-    const notesCharCount = document.getElementById('notesCharCount');
-    
-    function updateCharCount(element, counter) {
-      const length = element.value.length;
-      counter.textContent = length;
-      
-      const max = 500;
-      if (length > max * 0.9) {
-        counter.classList.add('danger');
-        counter.classList.remove('warning');
-      } else if (length > max * 0.75) {
-        counter.classList.add('warning');
-        counter.classList.remove('danger');
-      } else {
-        counter.classList.remove('warning', 'danger');
-      }
-    }
-    
-    notesInput.addEventListener('input', () => updateCharCount(notesInput, notesCharCount));
-    updateCharCount(notesInput, notesCharCount);
-    
-    // Toggle completion date field
-    const completedCheckbox = document.getElementById('completed');
-    const completedAtInput = document.getElementById('completed_at');
-    const statusChangeWarning = document.getElementById('statusChangeWarning');
-    
-    function toggleCompletionDate() {
-      if (completedCheckbox.checked) {
-        completedAtInput.disabled = false;
-        completedAtInput.required = false;
-        if (!completedAtInput.value) {
-          setNow();
-        }
-        
-        // Show status change warning if changing from incomplete to complete
-        if (!originalValues.completed) {
-          statusChangeWarning.classList.remove('d-none');
-        }
-      } else {
-        completedAtInput.disabled = true;
-        completedAtInput.required = false;
-        completedAtInput.value = '';
-        
-        // Show status change warning if changing from complete to incomplete
-        if (originalValues.completed) {
-          statusChangeWarning.classList.remove('d-none');
-        }
-      }
-    }
-    
-    // Initialize completion date field
-    toggleCompletionDate();
-    
-    // Set completion date to current time
-    function setNow() {
-      const now = new Date();
-      const year = now.getFullYear();
-      const month = String(now.getMonth() + 1).padStart(2, '0');
-      const day = String(now.getDate()).padStart(2, '0');
-      const hours = String(now.getHours()).padStart(2, '0');
-      const minutes = String(now.getMinutes()).padStart(2, '0');
-      completedAtInput.value = `${year}-${month}-${day}T${hours}:${minutes}`;
-    }
-    
-    // Clear completion date
-    function clearCompletionDate() {
-      completedAtInput.value = '';
-    }
-    
-    // Check for duplicate progress record
-    function checkForDuplicate() {
-      const userId = document.getElementById('user_id').value;
-      const lessonId = document.getElementById('lesson_id').value;
-      const duplicateWarning = document.getElementById('duplicateWarning');
-      const duplicateLink = document.getElementById('duplicateLink');
-      
-      // Don't check if values haven't changed
-      if (userId === originalValues.user_id && lessonId === originalValues.lesson_id) {
-        duplicateWarning.classList.add('d-none');
-        return;
-      }
-      
-      if (!userId || !lessonId) {
-        duplicateWarning.classList.add('d-none');
-        return;
-      }
-      
-      // Check if another progress record exists for this user and lesson
-      fetch(`/api/check-progress-duplicate/${userId}/${lessonId}?exclude={{ $progress->id }}`)
-        .then(response => response.json())
-        .then(data => {
-          if (data.exists && data.progress_id) {
-            duplicateWarning.classList.remove('d-none');
-            duplicateLink.href = `/lesson-progress/${data.progress_id}`;
-          } else {
-            duplicateWarning.classList.add('d-none');
-          }
-        })
-        .catch(error => {
-          console.error('Error checking duplicate:', error);
-        });
-    }
-    
-    // Load user statistics
-    function loadUserStats() {
-      const userId = document.getElementById('user_id').value;
-      const userStatsDiv = document.getElementById('userStats');
-      
-      if (!userId) {
-        userStatsDiv.innerHTML = '<p class="text-muted mb-0 text-center">No user selected</p>';
-        return;
-      }
-      
-      fetch(`/api/users/${userId}/lesson-progress`)
-        .then(response => response.json())
-        .then(data => {
-          userStatsDiv.innerHTML = `
-            <div class="row">
-              <div class="col-4">
-                <div class="stat-card">
-                  <div class="stat-number">${data.completed_lessons}</div>
-                  <div class="stat-label">Completed</div>
-                </div>
-              </div>
-              <div class="col-4">
-                <div class="stat-card">
-                  <div class="stat-number">${data.in_progress}</div>
-                  <div class="stat-label">In Progress</div>
-                </div>
-              </div>
-              <div class="col-4">
-                <div class="stat-card">
-                  <div class="stat-number">${data.total_lessons}</div>
-                  <div class="stat-label">Total</div>
-                </div>
-              </div>
-            </div>
-            <div class="mt-2">
-              <p class="mb-1 small text-muted">
-                <i class="fas fa-user"></i> ${data.user_name || 'User'}
-              </p>
-              <p class="mb-0 small text-muted">
-                <i class="fas fa-percentage"></i> Completion Rate: 
-                ${data.total_lessons > 0 ? Math.round((data.completed_lessons / data.total_lessons) * 100) : 0}%
-              </p>
-            </div>
-          `;
-          
-          // Update progress visualization
-          updateProgressVisualization();
-        })
-        .catch(error => {
-          console.error('Error:', error);
-          userStatsDiv.innerHTML = '<p class="text-danger text-center">Failed to load user stats</p>';
-        });
-    }
-    
-    // Load lesson statistics
-    function loadLessonStats() {
-      const lessonId = document.getElementById('lesson_id').value;
-      const lessonStatsDiv = document.getElementById('lessonStats');
-      
-      if (!lessonId) {
-        lessonStatsDiv.innerHTML = '<p class="text-muted mb-0 text-center">No lesson selected</p>';
-        return;
-      }
-      
-      fetch(`/api/lessons/${lessonId}/progress-stats`)
-        .then(response => response.json())
-        .then(data => {
-          lessonStatsDiv.innerHTML = `
-            <div class="row">
-              <div class="col-4">
-                <div class="stat-card">
-                  <div class="stat-number">${data.completed_count}</div>
-                  <div class="stat-label">Completed</div>
-                </div>
-              </div>
-              <div class="col-4">
-                <div class="stat-card">
-                  <div class="stat-number">${data.in_progress_count}</div>
-                  <div class="stat-label">In Progress</div>
-                </div>
-              </div>
-              <div class="col-4">
-                <div class="stat-card">
-                  <div class="stat-number">${data.total_users}</div>
-                  <div class="stat-label">Total Users</div>
-                </div>
-              </div>
-            </div>
-            <div class="mt-2">
-              <p class="mb-1 small text-muted">
-                <i class="fas fa-book"></i> ${data.lesson_title || 'Lesson'}
-              </p>
-              <p class="mb-0 small text-muted">
-                <i class="fas fa-graduation-cap"></i> ${data.course_title || 'No Course'}
-              </p>
-            </div>
-          `;
-          
-          // Update progress visualization
-          updateProgressVisualization();
-        })
-        .catch(error => {
-          console.error('Error:', error);
-          lessonStatsDiv.innerHTML = '<p class="text-danger text-center">Failed to load lesson stats</p>';
-        });
-    }
-    
-    // Update progress visualization
-    function updateProgressVisualization() {
-      const userId = document.getElementById('user_id').value;
-      const lessonId = document.getElementById('lesson_id').value;
-      
-      if (!userId || !lessonId) {
-        return;
-      }
-      
-      // Fetch combined data
-      Promise.all([
-        fetch(`/api/users/${userId}/lesson-progress`).then(r => r.json()),
-        fetch(`/api/lessons/${lessonId}/progress-stats`).then(r => r.json())
-      ])
-      .then(([userData, lessonData]) => {
-        const userCompletionRate = userData.total_lessons > 0 
-          ? Math.round((userData.completed_lessons / userData.total_lessons) * 100) 
-          : 0;
-        
-        const lessonCompletionRate = lessonData.total_users > 0
-          ? Math.round((lessonData.completed_count / lessonData.total_users) * 100)
-          : 0;
-        
-        // Update user progress
-        document.getElementById('userProgressPercent').textContent = userCompletionRate + '%';
-        const userProgressBar = document.getElementById('userProgressBar');
-        userProgressBar.style.width = userCompletionRate + '%';
-        
-        // Update lesson progress
-        document.getElementById('lessonProgressPercent').textContent = lessonCompletionRate + '%';
-        const lessonProgressBar = document.getElementById('lessonProgressBar');
-        lessonProgressBar.style.width = lessonCompletionRate + '%';
-        
-        // Color code based on completion rate
-        if (userCompletionRate >= 80) {
-          userProgressBar.style.background = 'linear-gradient(145deg, #2ecc71, #27ae60)';
-        } else if (userCompletionRate >= 50) {
-          userProgressBar.style.background = 'linear-gradient(145deg, #f39c12, #e67e22)';
-        } else {
-          userProgressBar.style.background = 'linear-gradient(145deg, #e74c3c, #c0392b)';
-        }
-        
-        if (lessonCompletionRate >= 80) {
-          lessonProgressBar.style.background = 'linear-gradient(145deg, #2ecc71, #27ae60)';
-        } else if (lessonCompletionRate >= 50) {
-          lessonProgressBar.style.background = 'linear-gradient(145deg, #f39c12, #e67e22)';
-        } else {
-          lessonProgressBar.style.background = 'linear-gradient(145deg, #e74c3c, #c0392b)';
-        }
-      })
-      .catch(error => {
-        console.error('Error updating visualization:', error);
-      });
-    }
-    
-    // Reset form to original values
-    function resetToOriginal() {
-      if (confirm('Are you sure you want to reset all changes to the original values?')) {
-        document.getElementById('user_id').value = originalValues.user_id;
-        document.getElementById('lesson_id').value = originalValues.lesson_id;
-        document.getElementById('completed').checked = originalValues.completed;
-        completedAtInput.value = originalValues.completed_at;
-        notesInput.value = originalValues.notes.replace(/\\'/g, "'");
-        
-        // Reset character count
-        updateCharCount(notesInput, notesCharCount);
-        
-        // Toggle completion date
-        toggleCompletionDate();
-        
-        // Hide warnings
-        document.getElementById('duplicateWarning').classList.add('d-none');
-        document.getElementById('statusChangeWarning').classList.add('d-none');
-        
-        // Reload stats
-        loadUserStats();
-        loadLessonStats();
-        
-        // Show success message
-        const successAlert = document.createElement('div');
-        successAlert.className = 'alert alert-success mt-3';
-        successAlert.innerHTML = '<i class="fas fa-check-circle"></i> All changes reset to original values';
-        document.querySelector('.card-body').insertBefore(successAlert, document.querySelector('form'));
-        
-        setTimeout(() => successAlert.remove(), 3000);
-      }
-    }
-    
-    // Form validation
-    const form = document.getElementById('progressForm');
-    form.addEventListener('submit', function(e) {
-      const userId = document.getElementById('user_id').value;
-      const lessonId = document.getElementById('lesson_id').value;
-      const completed = document.getElementById('completed').checked;
-      const completedAt = document.getElementById('completed_at').value;
-      
-      let isValid = true;
-      
-      if (!userId) {
-        document.getElementById('user_id').classList.add('is-invalid');
-        isValid = false;
-      }
-      
-      if (!lessonId) {
-        document.getElementById('lesson_id').classList.add('is-invalid');
-        isValid = false;
-      }
-      
-      if (completed && !completedAt) {
-        document.getElementById('completed_at').classList.add('is-invalid');
-        isValid = false;
-      }
-      
-      // Check for duplicate (prevent submission if duplicate exists)
-      const duplicateWarning = document.getElementById('duplicateWarning');
-      if (!duplicateWarning.classList.contains('d-none')) {
-        if (!confirm('Another progress record exists for this user and lesson. Continue anyway?')) {
-          e.preventDefault();
-          return false;
-        }
-      }
-      
-      if (!isValid) {
-        e.preventDefault();
-        
-        // Show error message
-        const errorDiv = document.createElement('div');
-        errorDiv.className = 'alert alert-danger mt-3';
-        errorDiv.innerHTML = '<strong>Error!</strong> Please fill in all required fields marked with *';
-        form.prepend(errorDiv);
-        
-        // Scroll to top
-        window.scrollTo({ top: 0, behavior: 'smooth' });
-        
-        return false;
-      }
-      
-      return true;
-    });
-    
-    // Remove invalid class on input
-    const inputs = document.querySelectorAll('input, select, textarea');
-    inputs.forEach(input => {
-      input.addEventListener('input', function() {
-        this.classList.remove('is-invalid');
-      });
-      input.addEventListener('change', function() {
-        this.classList.remove('is-invalid');
-      });
-    });
-    
-    // Warn about unsaved changes
-    let formChanged = false;
-    const formInputs = form.querySelectorAll('input, select, textarea');
-    
-    formInputs.forEach(input => {
-      const originalValue = input.value;
-      input.addEventListener('input', () => {
-        formChanged = input.value !== originalValue;
-      });
-      input.addEventListener('change', () => {
-        formChanged = input.value !== originalValue;
-      });
-    });
-    
-    window.addEventListener('beforeunload', function(e) {
-      if (formChanged) {
-        e.preventDefault();
-        e.returnValue = 'You have unsaved changes. Are you sure you want to leave?';
-      }
-    });
-    
-    // Initialize stats on load
-    setTimeout(() => {
-      loadUserStats();
-      loadLessonStats();
-    }, 500);
-    
-    // Initialize tooltips
-    const tooltipTriggerList = [].slice.call(document.querySelectorAll('[title]'));
-    tooltipTriggerList.map(function (tooltipTriggerEl) {
-      return new bootstrap.Tooltip(tooltipTriggerEl);
-    });
-  });
-</script>
 
-@stop
+@section('content')
+<div class="container-fluid py-4">
+    {{-- Loading Overlay --}}
+    <div id="loadingOverlay" class="loading-overlay">
+        <div class="loading-spinner"></div>
+    </div>
+
+    <div class="form-container">
+        <div class="form-header">
+            <h2><i class="fas fa-edit text-warning me-2"></i>Edit Lesson Progress</h2>
+            <p>Update progress information for <strong>{{ $progress->user->name }}</strong> - <strong>{{ $progress->lesson->title }}</strong></p>
+        </div>
+
+        {{-- Duplicate Warning --}}
+        <div id="duplicateWarning" class="duplicate-warning">
+            <i class="fas fa-exclamation-triangle me-2"></i>
+            <span id="duplicateMessage"></span>
+        </div>
+
+        <form id="progressForm" action="{{ route('lesson-progress.update', $progress->id) }}" method="POST">
+            @csrf
+            @method('PUT')
+
+            {{-- Current Status --}}
+            <div class="current-status {{ $progress->completed ? 'completed' : 'in-progress' }}">
+                <div class="d-flex justify-content-between align-items-center">
+                    <div>
+                        <h6 class="mb-2">Current Status:</h6>
+                        @if($progress->completed)
+                            <span class="status-badge completed">
+                                <i class="fas fa-check-circle me-1"></i>Completed
+                            </span>
+                        @else
+                            <span class="status-badge in-progress">
+                                <i class="fas fa-hourglass me-1"></i>In Progress
+                            </span>
+                        @endif
+                    </div>
+                    @if($progress->completed_at)
+                        <div class="text-end">
+                            <small class="text-muted">
+                                <i class="fas fa-clock me-1"></i>
+                                {{ $progress->completed_at->format('M d, Y H:i') }}
+                            </small>
+                            <br>
+                            <small class="text-muted">
+                                {{ $progress->completed_at->diffForHumans() }}
+                            </small>
+                        </div>
+                    @endif
+                </div>
+            </div>
+
+            <div class="row mb-3">
+                <div class="col-md-12">
+                    <label class="form-label">
+                        <i class="fas fa-user me-1 text-primary"></i>User
+                    </label>
+                    <select name="user_id" id="userSelect" class="form-select @error('user_id') is-invalid @enderror" required>
+                        <option value="">Choose a user...</option>
+                        @foreach($users as $user)
+                            <option value="{{ $user->id }}" 
+                                    data-name="{{ $user->name }}"
+                                    data-email="{{ $user->email }}"
+                                    @selected(old('user_id', $progress->user_id) == $user->id)>
+                                {{ $user->name }} ({{ $user->email }})
+                            </option>
+                        @endforeach
+                    </select>
+                    @error('user_id')
+                        <div class="invalid-feedback">{{ $message }}</div>
+                    @enderror
+                </div>
+            </div>
+
+            <div class="row mb-3">
+                <div class="col-md-12">
+                    <label class="form-label">
+                        <i class="fas fa-video me-1 text-primary"></i>Lesson
+                    </label>
+                    <select name="lesson_id" id="lessonSelect" class="form-select @error('lesson_id') is-invalid @enderror" required>
+                        <option value="">Choose a lesson...</option>
+                        @foreach($lessons as $lesson)
+                            <option value="{{ $lesson->id }}" 
+                                    data-title="{{ $lesson->title }}"
+                                    data-course="{{ $lesson->course->title ?? 'No Course' }}"
+                                    data-position="{{ $lesson->position }}"
+                                    @selected(old('lesson_id', $progress->lesson_id) == $lesson->id)>
+                                {{ $lesson->title }} 
+                                @if($lesson->course)
+                                    ({{ $lesson->course->title }})
+                                @endif
+                            </option>
+                        @endforeach
+                    </select>
+                    @error('lesson_id')
+                        <div class="invalid-feedback">{{ $message }}</div>
+                    @enderror
+                </div>
+            </div>
+
+            <div class="row mb-4">
+                <div class="col-md-12">
+                    <div class="form-check form-switch">
+                        <input type="checkbox" name="completed" class="form-check-input" 
+                               id="completedSwitch" value="1" {{ old('completed', $progress->completed) ? 'checked' : '' }}>
+                        <label class="form-check-label" for="completedSwitch">
+                            <i class="fas fa-check-circle text-success me-1"></i>
+                            Mark as completed
+                        </label>
+                    </div>
+                    <small class="text-muted">
+                        <i class="fas fa-info-circle me-1"></i>
+                        Toggle to update completion status
+                    </small>
+                </div>
+            </div>
+
+            {{-- Preview Card --}}
+            <div id="previewCard" class="preview-card">
+                <h6 class="mb-3"><i class="fas fa-eye me-2"></i>Preview Changes</h6>
+                <div class="preview-item">
+                    <span class="preview-label">User:</span>
+                    <span class="preview-value" id="previewUser">{{ $progress->user->name }} ({{ $progress->user->email }})</span>
+                </div>
+                <div class="preview-item">
+                    <span class="preview-label">Lesson:</span>
+                    <span class="preview-value" id="previewLesson">{{ $progress->lesson->title }} ({{ $progress->lesson->course->title ?? 'No Course' }})</span>
+                </div>
+                <div class="preview-item">
+                    <span class="preview-label">Status:</span>
+                    <span class="preview-value" id="previewStatus">{{ $progress->completed ? 'Completed' : 'In Progress' }}</span>
+                </div>
+                @if($progress->completed_at)
+                <div class="preview-item">
+                    <span class="preview-label">Completed:</span>
+                    <span class="preview-value" id="previewCompletedAt">{{ $progress->completed_at->format('M d, Y H:i') }}</span>
+                </div>
+                @endif
+            </div>
+
+            {{-- Completion History --}}
+            @if($progress->completed_at)
+            <div class="history-timeline">
+                <h6 class="mb-3"><i class="fas fa-history me-2 text-info"></i>Completion History</h6>
+                <div class="timeline-item">
+                    <div class="timeline-icon bg-success text-white">
+                        <i class="fas fa-check"></i>
+                    </div>
+                    <div class="timeline-content">
+                        <div class="timeline-title">Lesson Completed</div>
+                        <div class="timeline-time">
+                            {{ $progress->completed_at->format('F d, Y \a\t h:i A') }}
+                            ({{ $progress->completed_at->diffForHumans() }})
+                        </div>
+                    </div>
+                </div>
+                <div class="timeline-item">
+                    <div class="timeline-icon bg-primary text-white">
+                        <i class="fas fa-plus"></i>
+                    </div>
+                    <div class="timeline-content">
+                        <div class="timeline-title">Progress Created</div>
+                        <div class="timeline-time">
+                            {{ $progress->created_at->format('F d, Y \a\t h:i A') }}
+                            ({{ $progress->created_at->diffForHumans() }})
+                        </div>
+                    </div>
+                </div>
+                @if($progress->updated_at != $progress->created_at)
+                <div class="timeline-item">
+                    <div class="timeline-icon bg-warning text-white">
+                        <i class="fas fa-edit"></i>
+                    </div>
+                    <div class="timeline-content">
+                        <div class="timeline-title">Last Updated</div>
+                        <div class="timeline-time">
+                            {{ $progress->updated_at->format('F d, Y \a\t h:i A') }}
+                            ({{ $progress->updated_at->diffForHumans() }})
+                        </div>
+                    </div>
+                </div>
+                @endif
+            </div>
+            @endif
+
+            <div class="d-flex justify-content-between align-items-center mt-4">
+                <div>
+                    <a href="{{ route('lesson-progress.index') }}" class="btn btn-secondary btn-cancel" id="cancelBtn">
+                        <i class="fas fa-times me-1"></i>Cancel
+                    </a>
+                </div>
+                <div>
+                    <button type="button" class="btn btn-info me-2" id="checkDuplicateBtn">
+                        <i class="fas fa-search me-1"></i>Check Duplicate
+                    </button>
+                    <button type="button" class="btn btn-danger me-2" id="deleteBtn" data-bs-toggle="modal" data-bs-target="#deleteModal">
+                        <i class="fas fa-trash me-1"></i>Delete
+                    </button>
+                    <button type="submit" class="btn btn-success btn-update" id="submitBtn">
+                        <i class="fas fa-save me-1"></i>Update Progress
+                    </button>
+                </div>
+            </div>
+        </form>
+    </div>
+</div>
+
+{{-- Delete Confirmation Modal --}}
+<div class="modal fade delete-modal" id="deleteModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">
+                    <i class="fas fa-exclamation-triangle me-2"></i>
+                    Confirm Delete
+                </h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <p>Are you sure you want to delete this progress record?</p>
+                <div class="alert alert-warning">
+                    <i class="fas fa-info-circle me-2"></i>
+                    <strong>This action cannot be undone.</strong>
+                </div>
+                <div class="mt-3 p-3 bg-light rounded">
+                    <p class="mb-1"><strong>User:</strong> {{ $progress->user->name }}</p>
+                    <p class="mb-1"><strong>Lesson:</strong> {{ $progress->lesson->title }}</p>
+                    <p class="mb-0"><strong>Status:</strong> {{ $progress->completed ? 'Completed' : 'In Progress' }}</p>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
+                    <i class="fas fa-times me-1"></i>Cancel
+                </button>
+                <form action="{{ route('lesson-progress.destroy', $progress->id) }}" method="POST" style="display: inline;">
+                    @csrf
+                    @method('DELETE')
+                    <button type="submit" class="btn btn-danger btn-delete-confirm">
+                        <i class="fas fa-trash me-1"></i>Delete Permanently
+                    </button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+@endsection
+
+@push('scripts')
+<script>
+    // ========== STATE MANAGEMENT ==========
+    let formState = {
+        originalUserId: '{{ $progress->user_id }}',
+        originalLessonId: '{{ $progress->lesson_id }}',
+        originalCompleted: {{ $progress->completed ? 'true' : 'false' }},
+        userSelected: true,
+        lessonSelected: true,
+        isDuplicate: false,
+        formChanged: false
+    };
+
+    // ========== DOM ELEMENTS ==========
+    const elements = {
+        form: document.getElementById('progressForm'),
+        userSelect: document.getElementById('userSelect'),
+        lessonSelect: document.getElementById('lessonSelect'),
+        completedSwitch: document.getElementById('completedSwitch'),
+        duplicateWarning: document.getElementById('duplicateWarning'),
+        duplicateMessage: document.getElementById('duplicateMessage'),
+        loadingOverlay: document.getElementById('loadingOverlay'),
+        previewCard: document.getElementById('previewCard'),
+        previewUser: document.getElementById('previewUser'),
+        previewLesson: document.getElementById('previewLesson'),
+        previewStatus: document.getElementById('previewStatus'),
+        previewCompletedAt: document.getElementById('previewCompletedAt'),
+        checkDuplicateBtn: document.getElementById('checkDuplicateBtn'),
+        submitBtn: document.getElementById('submitBtn'),
+        cancelBtn: document.getElementById('cancelBtn'),
+        deleteBtn: document.getElementById('deleteBtn')
+    };
+
+    // ========== INITIALIZATION ==========
+    document.addEventListener('DOMContentLoaded', function() {
+        initializeEventListeners();
+        initializePreview();
+    });
+
+    function initializeEventListeners() {
+        // User select change
+        elements.userSelect.addEventListener('change', function() {
+            formState.userSelected = this.value !== '';
+            checkFormChanged();
+            updatePreview();
+            if (this.value !== formState.originalUserId) {
+                checkDuplicate();
+            } else {
+                hideDuplicateWarning();
+            }
+        });
+
+        // Lesson select change
+        elements.lessonSelect.addEventListener('change', function() {
+            formState.lessonSelected = this.value !== '';
+            checkFormChanged();
+            updatePreview();
+            if (this.value !== formState.originalLessonId) {
+                checkDuplicate();
+            } else {
+                hideDuplicateWarning();
+            }
+        });
+
+        // Completed switch change
+        elements.completedSwitch.addEventListener('change', function() {
+            checkFormChanged();
+            updatePreview();
+            
+            // Show notification if status changed
+            if (this.checked !== formState.originalCompleted) {
+                showToast(`Status will change to ${this.checked ? 'Completed' : 'In Progress'}`, 'info');
+            }
+        });
+
+        // Check duplicate button
+        elements.checkDuplicateBtn.addEventListener('click', function() {
+            checkDuplicate(true);
+        });
+
+        // Form submit
+        elements.form.addEventListener('submit', handleFormSubmit);
+
+        // Cancel button
+        elements.cancelBtn.addEventListener('click', function(e) {
+            if (formState.formChanged) {
+                e.preventDefault();
+                confirmCancel();
+            }
+        });
+
+        // Warn before leaving
+        window.addEventListener('beforeunload', function(e) {
+            if (formState.formChanged) {
+                e.preventDefault();
+                e.returnValue = '';
+            }
+        });
+    }
+
+    // ========== FORM CHANGE DETECTION ==========
+    function checkFormChanged() {
+        const userIdChanged = elements.userSelect.value !== formState.originalUserId;
+        const lessonIdChanged = elements.lessonSelect.value !== formState.originalLessonId;
+        const completedChanged = elements.completedSwitch.checked !== formState.originalCompleted;
+        
+        formState.formChanged = userIdChanged || lessonIdChanged || completedChanged;
+    }
+
+    // ========== PREVIEW FUNCTIONALITY ==========
+    function initializePreview() {
+        updatePreview();
+    }
+
+    function updatePreview() {
+        // Update user preview
+        if (elements.userSelect.value) {
+            const selectedOption = elements.userSelect.options[elements.userSelect.selectedIndex];
+            const userName = selectedOption.dataset.name;
+            const userEmail = selectedOption.dataset.email;
+            elements.previewUser.textContent = `${userName} (${userEmail})`;
+        }
+
+        // Update lesson preview
+        if (elements.lessonSelect.value) {
+            const selectedOption = elements.lessonSelect.options[elements.lessonSelect.selectedIndex];
+            const lessonTitle = selectedOption.dataset.title;
+            const lessonCourse = selectedOption.dataset.course;
+            elements.previewLesson.textContent = `${lessonTitle} (${lessonCourse})`;
+        }
+
+        // Update status preview
+        elements.previewStatus.textContent = elements.completedSwitch.checked ? 'Completed' : 'In Progress';
+        
+        // Update completed at preview
+        if (elements.previewCompletedAt) {
+            if (elements.completedSwitch.checked && !formState.originalCompleted) {
+                elements.previewCompletedAt.textContent = 'Will be set to now';
+            } else if (!elements.completedSwitch.checked && formState.originalCompleted) {
+                elements.previewCompletedAt.textContent = 'Will be cleared';
+            }
+        }
+    }
+
+    // ========== DUPLICATE CHECK ==========
+    async function checkDuplicate(showNotification = false) {
+        const userId = elements.userSelect.value;
+        const lessonId = elements.lessonSelect.value;
+
+        // Skip if same as original
+        if (userId === formState.originalUserId && lessonId === formState.originalLessonId) {
+            hideDuplicateWarning();
+            return;
+        }
+
+        // Hide warning if no selections
+        if (!userId || !lessonId) {
+            hideDuplicateWarning();
+            formState.isDuplicate = false;
+            return;
+        }
+
+        showLoading();
+
+        try {
+            const response = await fetch(`/lesson-progress/check-duplicate/${userId}/${lessonId}?exclude={{ $progress->id }}`);
+            const data = await response.json();
+
+            if (data.exists) {
+                formState.isDuplicate = true;
+                elements.duplicateMessage.textContent = 
+                    `⚠️ Warning: This user already has progress for this lesson. Progress ID: ${data.progress_id}`;
+                elements.duplicateWarning.classList.add('show');
+                
+                if (showNotification) {
+                    showToast('Duplicate progress found!', 'warning');
+                }
+            } else {
+                hideDuplicateWarning();
+                
+                if (showNotification) {
+                    showToast('No duplicate found - you can proceed', 'success');
+                }
+            }
+        } catch (error) {
+            console.error('Error checking duplicate:', error);
+            showToast('Failed to check for duplicates', 'error');
+        } finally {
+            hideLoading();
+        }
+    }
+
+    function hideDuplicateWarning() {
+        formState.isDuplicate = false;
+        elements.duplicateWarning.classList.remove('show');
+    }
+
+    // ========== FORM HANDLING ==========
+    async function handleFormSubmit(e) {
+        e.preventDefault();
+
+        // Validate form
+        if (!validateForm()) {
+            return;
+        }
+
+        // Check if any changes were made
+        if (!formState.formChanged) {
+            const confirmNoChanges = await showConfirmDialog(
+                'No Changes Made',
+                'You haven\'t made any changes. Are you sure you want to update?'
+            );
+            
+            if (!confirmNoChanges) {
+                return;
+            }
+        }
+
+        // Check for duplicates before submit
+        if (formState.userSelected && formState.lessonSelected) {
+            await checkDuplicate();
+        }
+
+        // If duplicate exists, confirm with user
+        if (formState.isDuplicate) {
+            const confirmDuplicate = await showConfirmDialog(
+                'Duplicate Progress Warning',
+                'This user already has progress for this lesson. Are you sure you want to update to this duplicate?'
+            );
+            
+            if (!confirmDuplicate) {
+                return;
+            }
+        }
+
+        showLoading();
+
+        try {
+            // Submit form
+            elements.form.submit();
+        } catch (error) {
+            console.error('Error submitting form:', error);
+            showToast('Failed to update progress record', 'error');
+            hideLoading();
+        }
+    }
+
+    function validateForm() {
+        if (!elements.userSelect.value) {
+            showToast('Please select a user', 'error');
+            elements.userSelect.focus();
+            return false;
+        }
+
+        if (!elements.lessonSelect.value) {
+            showToast('Please select a lesson', 'error');
+            elements.lessonSelect.focus();
+            return false;
+        }
+
+        return true;
+    }
+
+    // ========== UTILITY FUNCTIONS ==========
+    function showLoading() {
+        elements.loadingOverlay.style.display = 'flex';
+    }
+
+    function hideLoading() {
+        elements.loadingOverlay.style.display = 'none';
+    }
+
+    function showToast(message, type = 'info') {
+        const toast = document.createElement('div');
+        toast.className = `toast-notification toast-${type}`;
+        
+        let icon = 'info-circle';
+        if (type === 'success') icon = 'check-circle';
+        if (type === 'error') icon = 'exclamation-circle';
+        if (type === 'warning') icon = 'exclamation-triangle';
+        
+        toast.innerHTML = `
+            <div class="d-flex align-items-center">
+                <i class="fas fa-${icon} me-2 fa-lg"></i>
+                <div>${message}</div>
+                <button class="btn-close btn-close-white ms-auto" onclick="this.parentElement.parentElement.remove()"></button>
+            </div>
+        `;
+        
+        document.body.appendChild(toast);
+        
+        setTimeout(() => {
+            toast.remove();
+        }, 5000);
+    }
+
+    function showConfirmDialog(title, message) {
+        return new Promise((resolve) => {
+            // Create modal dynamically
+            const modalId = 'confirmModal_' + Date.now();
+            const modal = document.createElement('div');
+            modal.className = 'modal fade show';
+            modal.id = modalId;
+            modal.style.display = 'block';
+            modal.style.backgroundColor = 'rgba(0,0,0,0.5)';
+            modal.setAttribute('tabindex', '-1');
+            
+            modal.innerHTML = `
+                <div class="modal-dialog modal-dialog-centered">
+                    <div class="modal-content">
+                        <div class="modal-header bg-warning">
+                            <h5 class="modal-title text-white">
+                                <i class="fas fa-question-circle me-2"></i>${title}
+                            </h5>
+                            <button type="button" class="btn-close btn-close-white" onclick="document.getElementById('${modalId}').remove()"></button>
+                        </div>
+                        <div class="modal-body">
+                            <p>${message}</p>
+                        </div>
+                        <div class="modal-footer">
+                            <button type="button" class="btn btn-secondary" onclick="document.getElementById('${modalId}').remove(); resolve(false)">
+                                <i class="fas fa-times me-1"></i>Cancel
+                            </button>
+                            <button type="button" class="btn btn-warning" onclick="document.getElementById('${modalId}').remove(); resolve(true)">
+                                <i class="fas fa-check me-1"></i>Continue
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            `;
+            
+            document.body.appendChild(modal);
+            
+            // Store resolve function globally for this modal
+            window['resolve_' + modalId] = resolve;
+            
+            // Update button onclick to use the stored resolve
+            const buttons = modal.querySelectorAll('.modal-footer button');
+            buttons[0].onclick = () => {
+                document.getElementById(modalId).remove();
+                resolve(false);
+            };
+            buttons[1].onclick = () => {
+                document.getElementById(modalId).remove();
+                resolve(true);
+            };
+        });
+    }
+
+    function confirmCancel() {
+        showConfirmDialog(
+            'Unsaved Changes',
+            'You have unsaved changes. Are you sure you want to leave?'
+        ).then((confirmed) => {
+            if (confirmed) {
+                window.location.href = elements.cancelBtn.href;
+            }
+        });
+    }
+
+    // ========== LIVE SEARCH/FILTER (Optional) ==========
+    function addSearchToSelect(selectElement, placeholder) {
+        const searchInput = document.createElement('input');
+        searchInput.type = 'text';
+        searchInput.className = 'form-control mt-2 mb-2';
+        searchInput.placeholder = placeholder;
+        
+        selectElement.parentNode.insertBefore(searchInput, selectElement);
+        
+        searchInput.addEventListener('keyup', function() {
+            const searchTerm = this.value.toLowerCase();
+            const options = selectElement.options;
+            
+            for (let i = 0; i < options.length; i++) {
+                if (i === 0) continue; // Skip first option
+                
+                const text = options[i].text.toLowerCase();
+                options[i].style.display = text.includes(searchTerm) ? '' : 'none';
+            }
+        });
+    }
+
+    // Uncomment to add search to selects
+    // addSearchToSelect(elements.userSelect, 'Search users...');
+    // addSearchToSelect(elements.lessonSelect, 'Search lessons...');
+</script>
+@endpush

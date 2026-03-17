@@ -1,67 +1,57 @@
 <?php
+// app/Http/Controllers/LessonProgressController.php
 
 namespace App\Http\Controllers;
 
-use App\Models\LessonProgress;
 use App\Models\User;
 use App\Models\Lesson;
-use Illuminate\Http\Request;
+use App\Models\LessonProgress; 
+use App\Traits\HandlesApiResponses;
+use App\Exceptions\DuplicateProgressException;
+use App\Http\Requests\LessonProgress\StoreLessonProgressRequest;
+use App\Http\Requests\LessonProgress\UpdateLessonProgressRequest;
+use App\Http\Requests\LessonProgress\FilterLessonProgressRequest;
+use App\Http\Requests\LessonProgress\BulkActionRequest;
+use App\Services\LessonProgress\LessonProgressQueryService;
+use App\Services\LessonProgress\LessonProgressStatisticsService;
+use App\Services\LessonProgress\LessonProgressUpdateService;
+use Illuminate\Http\Request; 
 
 class LessonProgressController extends Controller
 {
+    use HandlesApiResponses;
+
+    protected LessonProgressQueryService $queryService;
+    protected LessonProgressStatisticsService $statisticsService;
+    protected LessonProgressUpdateService $updateService;
+
+    public function __construct(
+        LessonProgressQueryService $queryService,
+        LessonProgressStatisticsService $statisticsService,
+        LessonProgressUpdateService $updateService
+    ) {
+        $this->queryService = $queryService;
+        $this->statisticsService = $statisticsService;
+        $this->updateService = $updateService;
+    }
+
     /**
      * Display a listing of the lesson progress.
      */
-    public function index(Request $request)
+    public function index(FilterLessonProgressRequest $request)
     {
-        // Build query with filters
-        $query = LessonProgress::with(['user', 'lesson.course'])
-            ->when($request->filled('user_id'), function ($q) use ($request) {
-                $q->where('user_id', $request->user_id);
-            })
-            ->when($request->filled('lesson_id'), function ($q) use ($request) {
-                $q->where('lesson_id', $request->lesson_id);
-            })
-            ->when($request->filled('status'), function ($q) use ($request) {
-                if ($request->status === 'completed') {
-                    $q->where('completed', true);
-                } elseif ($request->status === 'incomplete') {
-                    $q->where('completed', false);
-                }
-            })
-            ->when($request->filled('search'), function ($q) use ($request) {
-                $q->whereHas('user', function ($query) use ($request) {
-                    $query->where('name', 'like', '%' . $request->search . '%')
-                        ->orWhere('email', 'like', '%' . $request->search . '%');
-                })->orWhereHas('lesson', function ($query) use ($request) {
-                    $query->where('title', 'like', '%' . $request->search . '%');
-                });
-            })
-            ->latest();
-
-        // Get paginated results
-        $lessonProgresses = $query->paginate(20)
-            ->appends($request->query());
-
-        // Get statistics
-        $totalProgress = LessonProgress::count();
-        $completedCount = LessonProgress::where('completed', true)->count();
-        $incompleteCount = LessonProgress::where('completed', false)->count();
-        
-        // Latest completion timestamp
-        $latestCompletion = LessonProgress::where('completed', true)
-            ->latest('completed_at')
-            ->value('completed_at');
+        $lessonProgresses = $this->queryService->getFilteredProgress($request);
+        $stats = $this->statisticsService->getStatistics();
 
         return view('lesson-progress.index', [
             'lessonProgresses' => $lessonProgresses,
             'users' => User::all(),
             'lessons' => Lesson::with('course')->get(),
-            'lessonProgressesCount' => $totalProgress,
-            'completedCount' => $completedCount,
-            'incompleteCount' => $incompleteCount,
-            'completionPercentage' => $totalProgress > 0 ? ($completedCount / $totalProgress) * 100 : 0,
-            'latestCompletion' => $latestCompletion,
+            'lessonProgressesCount' => $stats['total'],
+            'completedCount' => $stats['completed'],
+            'incompleteCount' => $stats['incomplete'],
+            'completionPercentage' => $stats['percentage'],
+            'latestCompletion' => $stats['latest_completion'],
         ]);
     }
 
@@ -70,31 +60,28 @@ class LessonProgressController extends Controller
      */
     public function create()
     {
-        $users = User::all();
-        $lessons = Lesson::with('course')->get();
-        
-        return view('lesson-progress.create', compact('users', 'lessons'));
+        return view('lesson-progress.create', [
+            'users' => User::all(),
+            'lessons' => Lesson::with('course')->get(),
+        ]);
     }
 
     /**
      * Store a newly created lesson progress in storage.
      */
-    public function store(Request $request)
+    public function store(StoreLessonProgressRequest $request)
     {
-        $request->validate([
-            'user_id' => 'required|exists:users,id',
-            'lesson_id' => 'required|exists:lessons,id',
-            'completed' => 'boolean',
-        ]);
+        try {
+            $progress = $this->updateService->create($request->validated());
 
-        LessonProgress::create([
-            'user_id' => $request->user_id,
-            'lesson_id' => $request->lesson_id,
-            'completed' => $request->completed ?? false,
-            'completed_at' => $request->completed ? now() : null,
-        ]);
+            return redirect()->route('lesson-progress.index')
+                ->with('success', 'Lesson progress created successfully!');
 
-        return redirect()->route('lesson-progress.index')->with('success', 'Lesson progress created successfully!');
+        } catch (DuplicateProgressException $e) {
+            return redirect()->back()
+                ->with('error', $e->getMessage())
+                ->withInput();
+        }
     }
 
     /**
@@ -112,40 +99,30 @@ class LessonProgressController extends Controller
     public function edit($id)
     {
         $progress = LessonProgress::findOrFail($id);
-        $users = User::all();
-        $lessons = Lesson::with('course')->get();
         
-        return view('lesson-progress.edit', compact('progress', 'users', 'lessons'));
+        return view('lesson-progress.edit', [
+            'progress' => $progress,
+            'users' => User::all(),
+            'lessons' => Lesson::with('course')->get(),
+        ]);
     }
 
     /**
      * Update the specified lesson progress in storage.
      */
-    public function update(Request $request, $id)
+    public function update(UpdateLessonProgressRequest $request, $id)
     {
-        $request->validate([
-            'user_id' => 'required|exists:users,id',
-            'lesson_id' => 'required|exists:lessons,id',
-            'completed' => 'boolean',
-        ]);
+        try {
+            $progress = $this->updateService->update($id, $request->validated());
 
-        $progress = LessonProgress::findOrFail($id);
-        $updateData = [
-            'user_id' => $request->user_id,
-            'lesson_id' => $request->lesson_id,
-            'completed' => $request->completed ?? false,
-        ];
+            return redirect()->route('lesson-progress.index')
+                ->with('success', 'Lesson progress updated successfully!');
 
-        // Update completed_at if marking as completed
-        if ($request->completed && !$progress->completed) {
-            $updateData['completed_at'] = now();
-        } elseif (!$request->completed && $progress->completed) {
-            $updateData['completed_at'] = null;
+        } catch (DuplicateProgressException $e) {
+            return redirect()->back()
+                ->with('error', $e->getMessage())
+                ->withInput();
         }
-
-        $progress->update($updateData);
-
-        return redirect()->route('lesson-progress.index')->with('success', 'Lesson progress updated successfully!');
     }
 
     /**
@@ -153,47 +130,39 @@ class LessonProgressController extends Controller
      */
     public function destroy(string $id)
     {
-        $progress = LessonProgress::findOrFail($id);
-        $progress->delete();
-
-        return redirect()->route('lesson-progress.index')->with('success', 'Lesson progress deleted successfully.');
+        $this->updateService->delete($id);
+        return redirect()->route('lesson-progress.index')
+            ->with('success', 'Lesson progress deleted successfully.');
     }
 
     /**
      * Mark lesson as complete for authenticated user.
      */
-    public function markComplete(Request $request, $lessonId)
+    public function markComplete($lessonId) // Removed unused Request parameter
     {
-        $progress = LessonProgress::firstOrCreate([
-            'user_id' => auth()->id(),
-            'lesson_id' => $lessonId,
-        ], [
-            'completed' => false,
-        ]);
-
-        $progress->update([
-            'completed' => true,
-            'completed_at' => now(),
-        ]);
-
-        return back()->with('success', 'Lesson marked as complete!');
+        try {
+            $progress = $this->updateService->markComplete(auth()->id(), $lessonId);
+            
+            return back()->with('success', 'Lesson marked as complete!');
+            
+        } catch (\Exception $e) {
+            return back()->with('error', 'Failed to mark lesson as complete.');
+        }
     }
 
     /**
      * Mark lesson as incomplete for authenticated user.
      */
-    public function markIncomplete(Request $request, $lessonId)
+    public function markIncomplete($lessonId) // Removed unused Request parameter
     {
-        $progress = LessonProgress::where('user_id', auth()->id())
-            ->where('lesson_id', $lessonId)
-            ->firstOrFail();
-
-        $progress->update([
-            'completed' => false,
-            'completed_at' => null,
-        ]);
-
-        return back()->with('success', 'Lesson marked as incomplete!');
+        try {
+            $progress = $this->updateService->markIncomplete(auth()->id(), $lessonId);
+            
+            return back()->with('success', 'Lesson marked as incomplete!');
+            
+        } catch (\Exception $e) {
+            return back()->with('error', 'Failed to mark lesson as incomplete.');
+        }
     }
 
     /**
@@ -201,41 +170,43 @@ class LessonProgressController extends Controller
      */
     public function toggle(Request $request, $id)
     {
-        $progress = LessonProgress::findOrFail($id);
-        
-        $completed = $request->input('completed');
-        $progress->completed = $completed;
-        $progress->completed_at = $completed ? now() : null;
-        $progress->save();
+        try {
+            $progress = $this->updateService->toggle($id, $request->input('completed'));
 
-        return response()->json([
-            'success' => true,
-            'message' => 'Progress updated successfully',
-            'completed' => $progress->completed
-        ]);
+            return $this->successResponse(
+                ['completed' => $progress->completed],
+                'Progress updated successfully'
+            );
+
+        } catch (\Exception $e) {
+            return $this->errorResponse('Failed to update progress', 500);
+        }
     }
 
     /**
      * Bulk complete progress records
      */
-    public function bulkComplete(Request $request)
+    public function bulkComplete(BulkActionRequest $request)
     {
-        $request->validate([
-            'ids' => 'required|array',
-            'ids.*' => 'exists:lesson_progress,id'
-        ]);
+        $updated = $this->updateService->bulkComplete($request->ids);
 
-        $updated = LessonProgress::whereIn('id', $request->ids)
-            ->update([
-                'completed' => true,
-                'completed_at' => now()
-            ]);
+        return $this->successResponse(
+            ['updated' => $updated],
+            "{$updated} records marked as complete"
+        );
+    }
 
-        return response()->json([
-            'success' => true,
-            'message' => "{$updated} records marked as complete",
-            'updated' => $updated
-        ]);
+    /**
+     * Bulk delete progress records
+     */
+    public function bulkDelete(BulkActionRequest $request)
+    {
+        $deleted = $this->updateService->bulkDelete($request->ids);
+
+        return $this->successResponse(
+            ['deleted' => $deleted],
+            "{$deleted} records deleted successfully"
+        );
     }
 
     /**
@@ -243,41 +214,23 @@ class LessonProgressController extends Controller
      */
     public function stats()
     {
-        $total = LessonProgress::count();
-        $completed = LessonProgress::where('completed', true)->count();
-        
-        return response()->json([
-            'total' => $total,
-            'completed' => $completed,
-            'in_progress' => $total - $completed
-        ]);
+        return $this->successResponse(
+            $this->statisticsService->getQuickStats()
+        );
     }
 
-    // ADD THESE NEW METHODS FOR API ENDPOINTS
-    
     /**
      * Get user progress statistics for API
      */
     public function getUserProgress($id)
     {
         $user = User::findOrFail($id);
+        $stats = $this->statisticsService->getSingleUserStats($id);
         
-        $totalLessons = Lesson::count();
-        $completedLessons = LessonProgress::where('user_id', $id)
-            ->where('completed', true)
-            ->count();
-        $inProgress = LessonProgress::where('user_id', $id)
-            ->where('completed', false)
-            ->count();
-        
-        return response()->json([
-            'total_lessons' => $totalLessons,
-            'completed_lessons' => $completedLessons,
-            'in_progress' => $inProgress,
+        return $this->successResponse([
             'user_name' => $user->name,
-            'last_activity' => LessonProgress::where('user_id', $id)
-                ->latest()
-                ->value('updated_at')
+            'user_email' => $user->email,
+            ...$stats
         ]);
     }
 
@@ -286,28 +239,8 @@ class LessonProgressController extends Controller
      */
     public function getLessonProgressStats($id)
     {
-        $lesson = Lesson::with('course')->findOrFail($id);
-        
-        $completedCount = LessonProgress::where('lesson_id', $id)
-            ->where('completed', true)
-            ->count();
-        $inProgressCount = LessonProgress::where('lesson_id', $id)
-            ->where('completed', false)
-            ->count();
-        $totalUsers = LessonProgress::where('lesson_id', $id)
-            ->distinct('user_id')
-            ->count('user_id');
-        
-        return response()->json([
-            'lesson_title' => $lesson->title,
-            'course_title' => $lesson->course->title ?? null,
-            'position' => $lesson->position,
-            'is_published' => $lesson->is_published ?? true,
-            'has_video' => !empty($lesson->video_url),
-            'completed_count' => $completedCount,
-            'in_progress_count' => $inProgressCount,
-            'total_users' => $totalUsers
-        ]);
+        $stats = $this->statisticsService->getSingleLessonStats($id);
+        return $this->successResponse($stats);
     }
 
     /**
@@ -315,27 +248,12 @@ class LessonProgressController extends Controller
      */
     public function checkDuplicate($userId, $lessonId)
     {
-        $request = request();
-        $excludeId = $request->get('exclude');
-        
-        $query = LessonProgress::where('user_id', $userId)
-            ->where('lesson_id', $lessonId);
-            
-        if ($excludeId) {
-            $query->where('id', '!=', $excludeId);
-        }
-        
-        $exists = $query->exists();
-        
-        if ($exists) {
-            $progress = $query->first();
-                
-            return response()->json([
-                'exists' => true,
-                'progress_id' => $progress->id
-            ]);
-        }
-        
-        return response()->json(['exists' => false]);
+        $excludeId = request()->get('exclude');
+        $duplicate = $this->queryService->findDuplicate($userId, $lessonId, $excludeId);
+
+        return $this->successResponse([
+            'exists' => !is_null($duplicate),
+            'progress_id' => $duplicate?->id,
+        ]);
     }
 }

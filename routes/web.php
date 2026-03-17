@@ -177,4 +177,12 @@ Route::prefix('api')->group(function () {
     // Quick approval for reviews (AJAX)
     Route::post('/reviews/{id}/quick-approve', [ReviewController::class, 'quickApprove'])
         ->name('api.reviews.quick-approve');
+
+    // web.php
+    Route::resource('lesson-progress', LessonProgressController::class);
+    Route::post('lesson-progress/bulk-complete', [LessonProgressController::class, 'bulkComplete'])->name('lesson-progress.bulk-complete');
+    Route::delete('lesson-progress/bulk-delete', [LessonProgressController::class, 'bulkDelete'])->name('lesson-progress.bulk-delete');
+    Route::post('lesson-progress/{id}/toggle', [LessonProgressController::class, 'toggle'])->name('lesson-progress.toggle');
+    Route::get('lesson-progress/export', [LessonProgressController::class, 'export'])->name('lesson-progress.export');
+
 });

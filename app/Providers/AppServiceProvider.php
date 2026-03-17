@@ -16,6 +16,10 @@ use App\Services\Review\ReviewStatisticsService;
 use App\Services\Review\ReviewValidationService;
 use App\Services\Review\ReviewExportService;
 
+use App\Services\LessonProgress\LessonProgressQueryService;
+use App\Services\LessonProgress\LessonProgressStatisticsService;
+use App\Services\LessonProgress\LessonProgressUpdateService;
+
 class AppServiceProvider extends ServiceProvider
 {
     /**
@@ -57,6 +61,12 @@ class AppServiceProvider extends ServiceProvider
         $this->app->singleton(ReviewExportService::class, function ($app) {
             return new ReviewExportService();
         });
+
+        // Register Lesson Progress Services
+        $this->app->singleton(LessonProgressQueryService::class);
+        $this->app->singleton(LessonProgressStatisticsService::class);
+        $this->app->singleton(LessonProgressUpdateService::class);
+
     }
 
     /**

@@ -1,805 +1,1024 @@
+{{-- resources/views/lesson-progress/index.blade.php --}}
 @extends('layout')
-@section('content')
 
-<!-- Main Card with Updated Styling -->
-<div class="card shadow-lg rounded card-bg">
-    <div class="card-header header-bg">
-        <div class="d-flex justify-content-between align-items-center">
-            <h2><i class="fas fa-chart-line"></i> Lesson Progress Tracking</h2>
-            <div class="d-flex">
-                <!-- Filters -->
-                <div class="me-3">
-                    <select id="statusFilter" class="form-select form-select-sm" onchange="filterByStatus(this.value)">
-                        <option value="">All Status</option>
-                        <option value="completed" {{ request('status') == 'completed' ? 'selected' : '' }}>Completed</option>
-                        <option value="incomplete" {{ request('status') == 'incomplete' ? 'selected' : '' }}>Incomplete</option>
-                    </select>
-                </div>
-                
-                <!-- User Filter -->
-                @if(isset($users) && $users->isNotEmpty())
-                <div class="me-3">
-                    <select id="userFilter" class="form-select form-select-sm" onchange="filterByUser(this.value)">
-                        <option value="">All Users</option>
-                        @foreach($users as $user)
-                        <option value="{{ $user->id }}" {{ request('user_id') == $user->id ? 'selected' : '' }}>
-                            {{ $user->name }}
-                        </option>
-                        @endforeach
-                    </select>
-                </div>
-                @endif
-                
-                <!-- Lesson Filter -->
-                @if(isset($lessons) && $lessons->isNotEmpty())
-                <div class="me-3">
-                    <select id="lessonFilter" class="form-select form-select-sm" onchange="filterByLesson(this.value)">
-                        <option value="">All Lessons</option>
-                        @foreach($lessons as $lesson)
-                        <option value="{{ $lesson->id }}" {{ request('lesson_id') == $lesson->id ? 'selected' : '' }}>
-                            {{ Str::limit($lesson->title, 30) }}
-                        </option>
-                        @endforeach
-                    </select>
-                </div>
-                @endif
-                
-                <!-- Search Form -->
-                <form action="{{ url('/lesson-progress') }}" method="GET" class="d-inline">
-                    <div class="input-group">
-                        <input type="text" name="search" class="form-control" placeholder="Search..." 
-                               value="{{ request('search') }}" style="max-width: 200px;">
-                        <input type="hidden" name="status" id="searchStatus" value="{{ request('status') }}">
-                        <input type="hidden" name="user_id" id="searchUserId" value="{{ request('user_id') }}">
-                        <input type="hidden" name="lesson_id" id="searchLessonId" value="{{ request('lesson_id') }}">
-                        <button class="btn btn-outline-light" type="submit">
-                            <i class="fas fa-search"></i>
-                        </button>
-                    </div>
-                </form>
-            </div>
+@section('title', 'Lesson Progress')
+
+@section('styles')
+<style>
+    /* ========== STATISTICS CARDS ========== */
+    .stat-card {
+        transition: transform 0.2s, box-shadow 0.2s;
+        border: none;
+        border-radius: 10px;
+        overflow: hidden;
+    }
+    
+    .stat-card:hover {
+        transform: translateY(-5px);
+        box-shadow: 0 10px 20px rgba(0,0,0,0.1);
+    }
+    
+    .stat-card .card-body {
+        padding: 1.5rem;
+    }
+    
+    .stat-card .card-title {
+        font-size: 0.9rem;
+        text-transform: uppercase;
+        letter-spacing: 1px;
+        opacity: 0.9;
+        margin-bottom: 0.5rem;
+    }
+    
+    .stat-card h2 {
+        font-weight: 600;
+        margin-bottom: 0.25rem;
+    }
+    
+    .stat-card small {
+        font-size: 0.8rem;
+        opacity: 0.8;
+    }
+
+    /* ========== FILTER BAR ========== */
+    .filter-bar {
+        background: white;
+        border-radius: 10px;
+        padding: 1.5rem;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+        margin-bottom: 1.5rem;
+    }
+    
+    .filter-bar .form-label {
+        font-weight: 500;
+        color: #495057;
+        margin-bottom: 0.3rem;
+    }
+    
+    .filter-bar .form-control,
+    .filter-bar .form-select {
+        border-radius: 8px;
+        border: 1px solid #dee2e6;
+        padding: 0.5rem 0.75rem;
+        transition: border-color 0.2s, box-shadow 0.2s;
+    }
+    
+    .filter-bar .form-control:focus,
+    .filter-bar .form-select:focus {
+        border-color: #80bdff;
+        box-shadow: 0 0 0 0.2rem rgba(0,123,255,0.15);
+    }
+    
+    .filter-bar .btn {
+        border-radius: 8px;
+        padding: 0.5rem 1rem;
+        font-weight: 500;
+    }
+    
+    .filter-bar .btn-primary {
+        background: linear-gradient(45deg, #007bff, #0069d9);
+        border: none;
+    }
+    
+    .filter-bar .btn-primary:hover {
+        background: linear-gradient(45deg, #0069d9, #0056b3);
+        transform: translateY(-1px);
+        box-shadow: 0 4px 8px rgba(0,123,255,0.2);
+    }
+
+    /* ========== TABLE STYLES ========== */
+    .table-container {
+        background: white;
+        border-radius: 10px;
+        padding: 1.5rem;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+    }
+    
+    .table {
+        margin-bottom: 0;
+    }
+    
+    .table thead th {
+        border-bottom: 2px solid #dee2e6;
+        font-weight: 600;
+        color: #495057;
+        text-transform: uppercase;
+        font-size: 0.85rem;
+        letter-spacing: 0.5px;
+        padding: 1rem 0.75rem;
+    }
+    
+    .table tbody td {
+        padding: 1rem 0.75rem;
+        vertical-align: middle;
+        border-bottom: 1px solid #dee2e6;
+    }
+    
+    .table tbody tr:hover {
+        background-color: rgba(0,123,255,0.02);
+    }
+    
+    .table tbody tr:last-child td {
+        border-bottom: none;
+    }
+
+    /* ========== USER INFO ========== */
+    .user-info {
+        display: flex;
+        align-items: center;
+    }
+    
+    .user-avatar {
+        width: 40px;
+        height: 40px;
+        border-radius: 50%;
+        background: linear-gradient(45deg, #007bff, #00bcd4);
+        color: white;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-weight: 600;
+        margin-right: 0.75rem;
+        flex-shrink: 0;
+    }
+    
+    .user-details {
+        min-width: 0;
+    }
+    
+    .user-details strong {
+        color: #212529;
+        text-decoration: none;
+        transition: color 0.2s;
+    }
+    
+    .user-details strong:hover {
+        color: #007bff;
+    }
+    
+    .user-details small {
+        display: block;
+        color: #6c757d;
+        font-size: 0.8rem;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+
+    /* ========== BADGES ========== */
+    .badge {
+        padding: 0.5rem 0.75rem;
+        font-weight: 500;
+        font-size: 0.8rem;
+        border-radius: 20px;
+    }
+    
+    .badge.bg-success {
+        background: linear-gradient(45deg, #28a745, #20c997) !important;
+    }
+    
+    .badge.bg-warning {
+        background: linear-gradient(45deg, #ffc107, #fd7e14) !important;
+        color: white;
+    }
+
+    /* ========== BUTTONS ========== */
+    .btn-group .btn {
+        padding: 0.4rem 0.75rem;
+        font-size: 0.875rem;
+        border-radius: 6px;
+        margin: 0 2px;
+        transition: all 0.2s;
+    }
+    
+    .btn-group .btn-info {
+        background-color: #17a2b8;
+        border-color: #17a2b8;
+        color: white;
+    }
+    
+    .btn-group .btn-info:hover {
+        background-color: #138496;
+        border-color: #117a8b;
+        transform: translateY(-2px);
+        box-shadow: 0 4px 8px rgba(23,162,184,0.3);
+    }
+    
+    .btn-group .btn-warning {
+        background-color: #ffc107;
+        border-color: #ffc107;
+        color: #212529;
+    }
+    
+    .btn-group .btn-warning:hover {
+        background-color: #e0a800;
+        border-color: #d39e00;
+        transform: translateY(-2px);
+        box-shadow: 0 4px 8px rgba(255,193,7,0.3);
+    }
+    
+    .btn-group .btn-success {
+        background-color: #28a745;
+        border-color: #28a745;
+        color: white;
+    }
+    
+    .btn-group .btn-success:hover {
+        background-color: #218838;
+        border-color: #1e7e34;
+        transform: translateY(-2px);
+        box-shadow: 0 4px 8px rgba(40,167,69,0.3);
+    }
+    
+    .btn-group .btn-danger {
+        background-color: #dc3545;
+        border-color: #dc3545;
+        color: white;
+    }
+    
+    .btn-group .btn-danger:hover {
+        background-color: #c82333;
+        border-color: #bd2130;
+        transform: translateY(-2px);
+        box-shadow: 0 4px 8px rgba(220,53,69,0.3);
+    }
+
+    /* ========== BULK ACTIONS ========== */
+    .bulk-actions {
+        position: fixed;
+        bottom: 20px;
+        left: 50%;
+        transform: translateX(-50%);
+        z-index: 1000;
+        animation: slideUp 0.3s ease-out;
+    }
+    
+    @keyframes slideUp {
+        from {
+            transform: translate(-50%, 100%);
+            opacity: 0;
+        }
+        to {
+            transform: translate(-50%, 0);
+            opacity: 1;
+        }
+    }
+    
+    .bulk-actions .alert {
+        border: none;
+        border-radius: 50px;
+        padding: 0.75rem 1.5rem;
+        box-shadow: 0 10px 30px rgba(0,0,0,0.15);
+        margin-bottom: 0;
+    }
+    
+    .bulk-actions .btn-sm {
+        border-radius: 30px;
+        padding: 0.4rem 1.2rem;
+        margin-left: 0.5rem;
+        font-weight: 500;
+    }
+
+    /* ========== EMPTY STATE ========== */
+    .empty-state {
+        text-align: center;
+        padding: 3rem 1rem;
+    }
+    
+    .empty-state i {
+        font-size: 4rem;
+        color: #dee2e6;
+        margin-bottom: 1rem;
+    }
+    
+    .empty-state h5 {
+        color: #495057;
+        font-weight: 600;
+        margin-bottom: 0.5rem;
+    }
+    
+    .empty-state p {
+        color: #6c757d;
+        margin-bottom: 1.5rem;
+    }
+    
+    .empty-state .btn {
+        border-radius: 30px;
+        padding: 0.6rem 2rem;
+        font-weight: 500;
+    }
+
+    /* ========== PAGINATION ========== */
+    .pagination {
+        margin-bottom: 0;
+    }
+    
+    .pagination .page-link {
+        border: none;
+        padding: 0.5rem 1rem;
+        color: #007bff;
+        border-radius: 8px;
+        margin: 0 2px;
+    }
+    
+    .pagination .page-item.active .page-link {
+        background: linear-gradient(45deg, #007bff, #0069d9);
+        color: white;
+    }
+
+    /* ========== LOADING OVERLAY ========== */
+    .loading-overlay {
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background: rgba(255,255,255,0.8);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        z-index: 9999;
+        display: none;
+    }
+    
+    .loading-spinner {
+        width: 50px;
+        height: 50px;
+        border: 4px solid #f3f3f3;
+        border-top: 4px solid #007bff;
+        border-radius: 50%;
+        animation: spin 1s linear infinite;
+    }
+    
+    @keyframes spin {
+        0% { transform: rotate(0deg); }
+        100% { transform: rotate(360deg); }
+    }
+
+    /* ========== CHECKBOX ========== */
+    input[type="checkbox"] {
+        width: 18px;
+        height: 18px;
+        cursor: pointer;
+        accent-color: #007bff;
+    }
+
+    /* ========== TOOLTIP ========== */
+    [data-tooltip] {
+        position: relative;
+        cursor: pointer;
+    }
+    
+    [data-tooltip]:before {
+        content: attr(data-tooltip);
+        position: absolute;
+        bottom: 100%;
+        left: 50%;
+        transform: translateX(-50%);
+        padding: 0.4rem 0.8rem;
+        background: #212529;
+        color: white;
+        font-size: 0.8rem;
+        border-radius: 4px;
+        white-space: nowrap;
+        display: none;
+        z-index: 1000;
+    }
+    
+    [data-tooltip]:hover:before {
+        display: block;
+    }
+
+    /* ========== ANIMATIONS ========== */
+    @keyframes highlight {
+        0% { background-color: rgba(40,167,69,0.2); }
+        100% { background-color: transparent; }
+    }
+    
+    .highlight-new {
+        animation: highlight 2s ease-out;
+    }
+
+    @keyframes slideInRight {
+        from {
+            transform: translateX(100%);
+            opacity: 0;
+        }
+        to {
+            transform: translateX(0);
+            opacity: 1;
+        }
+    }
+    
+    @keyframes slideOutRight {
+        from {
+            transform: translateX(0);
+            opacity: 1;
+        }
+        to {
+            transform: translateX(100%);
+            opacity: 0;
+        }
+    }
+
+    /* ========== NOTIFICATION ========== */
+    .notification-toast {
+        position: fixed;
+        top: 20px;
+        right: 20px;
+        z-index: 10000;
+        min-width: 300px;
+        padding: 1rem;
+        border-radius: 10px;
+        box-shadow: 0 5px 15px rgba(0,0,0,0.2);
+        animation: slideInRight 0.3s ease;
+        margin-bottom: 10px;
+    }
+    
+    .notification-toast:hover {
+        transform: scale(1.02);
+        transition: transform 0.2s;
+    }
+
+    /* ========== RESPONSIVE ========== */
+    @media (max-width: 768px) {
+        .stat-card {
+            margin-bottom: 1rem;
+        }
+        
+        .filter-bar .row > div {
+            margin-bottom: 1rem;
+        }
+        
+        .btn-group {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 5px;
+        }
+        
+        .btn-group .btn {
+            flex: 1;
+            margin: 0;
+        }
+        
+        .bulk-actions {
+            width: 90%;
+        }
+        
+        .bulk-actions .alert {
+            border-radius: 10px;
+            text-align: center;
+        }
+        
+        .bulk-actions .btn-sm {
+            display: block;
+            width: 100%;
+            margin: 0.5rem 0 0 0;
+        }
+    }
+</style>
+@endsection
+
+@section('content')
+<div class="container-fluid">
+    {{-- Header --}}
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h1>Lesson Progress</h1>
+        <div>
+            <a href="{{ route('lesson-progress.create') }}" class="btn btn-primary">
+                <i class="fas fa-plus"></i> Add Progress
+            </a>
+            <button class="btn btn-success" onclick="exportProgress()">
+                <i class="fas fa-download"></i> Export
+            </button>
         </div>
     </div>
 
-    <div class="card-body">
-        <!-- Statistics Overview -->
-        <div class="row mb-4">
-            <div class="col-md-3">
-                <div class="stat-card bg-primary text-white p-3 rounded">
-                    <h6 class="mb-1">Total Progress Records</h6>
-                    <h3 class="mb-0">
-                        @if(method_exists($lessonProgresses, 'total'))
-                            {{ $lessonProgresses->total() }}
-                        @else
-                            {{ $lessonProgresses->count() }}
-                        @endif
-                    </h3>
+    {{-- Statistics Cards --}}
+    <div class="row mb-4">
+        <div class="col-md-3">
+            <div class="card bg-primary text-white">
+                <div class="card-body">
+                    <h6 class="card-title">Total Progress</h6>
+                    <h2 class="mb-0">{{ $lessonProgressesCount }}</h2>
                 </div>
             </div>
-            <div class="col-md-3">
-                <div class="stat-card bg-success text-white p-3 rounded">
-                    <h6 class="mb-1">Completed Lessons</h6>
-                    <h3 class="mb-0">{{ $completedCount ?? 0 }}</h3>
+        </div>
+        <div class="col-md-3">
+            <div class="card bg-success text-white">
+                <div class="card-body">
+                    <h6 class="card-title">Completed</h6>
+                    <h2 class="mb-0">{{ $completedCount }}</h2>
+                    <small>{{ $completionPercentage }}% of total</small>
                 </div>
             </div>
-            <div class="col-md-3">
-                <div class="stat-card bg-info text-white p-3 rounded">
-                    <h6 class="mb-1">Completion Rate</h6>
-                    <h3 class="mb-0">
-                        @if($lessonProgressesCount > 0)
-                            {{ number_format(($completedCount / $lessonProgressesCount) * 100, 1) }}%
-                        @else
-                            0%
-                        @endif
-                    </h3>
+        </div>
+        <div class="col-md-3">
+            <div class="card bg-warning text-white">
+                <div class="card-body">
+                    <h6 class="card-title">In Progress</h6>
+                    <h2 class="mb-0">{{ $incompleteCount }}</h2>
                 </div>
             </div>
-            <div class="col-md-3">
-                <div class="stat-card bg-warning text-white p-3 rounded">
-                    <h6 class="mb-1">Latest Completion</h6>
+        </div>
+        <div class="col-md-3">
+            <div class="card bg-info text-white">
+                <div class="card-body">
+                    <h6 class="card-title">Latest Completion</h6>
                     <h5 class="mb-0">
                         @if($latestCompletion)
                             {{ $latestCompletion->diffForHumans() }}
                         @else
-                            N/A
+                            Never
                         @endif
                     </h5>
                 </div>
             </div>
         </div>
-        
-        <!-- Progress Tracking Table -->
-        <div class="table-responsive">
-            <table class="table table-striped table-hover">
-                <thead>
-                    <tr>
-                        <th>#</th>
-                        <th>User</th>
-                        <th>Lesson</th>
-                        <th>Course</th>
-                        <th>Status</th>
-                        <th>Completion Date</th>
-                        <th>Created</th>
-                        <th>Actions</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    @foreach($lessonProgresses as $item)
-                        <tr>
-                            <td>
-                                @if(method_exists($lessonProgresses, 'currentPage'))
-                                    {{ ($lessonProgresses->currentPage() - 1) * $lessonProgresses->perPage() + $loop->iteration }}
-                                @else
-                                    {{ $loop->iteration }}
-                                @endif
-                            </td>
-                            <td>
-                                <div class="d-flex align-items-center">
-                                    <div class="user-avatar me-2">
-                                        <i class="fas fa-user-circle" style="color: #3498db; font-size: 24px;"></i>
-                                    </div>
-                                    <div>
-                                        <strong>{{ $item->user->name ?? 'N/A' }}</strong>
-                                        <br>
-                                        <small class="text-muted">{{ $item->user->email ?? '' }}</small>
-                                    </div>
-                                </div>
-                            </td>
-                            <td>
-                                <div class="d-flex align-items-center">
-                                    <div class="lesson-icon me-2">
-                                        <i class="fas fa-book" style="color: #2ecc71;"></i>
-                                    </div>
-                                    <div>
-                                        <strong>{{ $item->lesson->title ?? 'N/A' }}</strong>
-                                        <br>
-                                        <small class="text-muted">
-                                            Position: {{ $item->lesson->position ?? 'N/A' }}
-                                            @if($item->lesson->course)
-                                                | {{ $item->lesson->course->code ?? '' }}
-                                            @endif
-                                        </small>
-                                    </div>
-                                </div>
-                            </td>
-                            <td>
-                                @if($item->lesson->course)
-                                <div class="course-info">
-                                    <div class="d-flex align-items-center">
-                                        <div class="course-icon me-2">
-                                            <i class="fas fa-graduation-cap" style="color: #9b59b6;"></i>
-                                        </div>
-                                        <div>
-                                            <strong>{{ $item->lesson->course->title ?? 'N/A' }}</strong>
-                                            <br>
-                                            <small class="text-muted">{{ $item->lesson->course->code ?? '' }}</small>
-                                        </div>
-                                    </div>
-                                </div>
-                                @else
-                                <span class="text-danger">No Course</span>
-                                @endif
-                            </td>
-                            <td>
-                                @if($item->completed)
-                                <div class="status-badge">
-                                    <span class="badge bg-success">
-                                        <i class="fas fa-check-circle"></i> Completed
-                                    </span>
-                                    <br>
-                                    <small class="text-muted">
-                                        {{ $item->completed_at->format('M d, Y') }}
-                                    </small>
-                                </div>
-                                @else
-                                <span class="badge bg-secondary">
-                                    <i class="fas fa-clock"></i> In Progress
-                                </span>
-                                @endif
-                            </td>
-                            <td>
-                                @if($item->completed_at)
-                                <div class="completion-date">
-                                    <strong>{{ $item->completed_at->format('M d, Y') }}</strong>
-                                    <br>
-                                    <small class="text-muted">{{ $item->completed_at->format('h:i A') }}</small>
-                                </div>
-                                @else
-                                <span class="text-muted">Not completed</span>
-                                @endif
-                            </td>
-                            <td>
-                                <small class="text-muted">{{ $item->created_at->format('M d, Y') }}</small>
-                            </td>
-                            <td>
-                                <div class="btn-group" role="group">
-                                    <!-- View Button -->
-                                    <a href="{{ url('/lesson-progress/' . $item->id) }}" title="View Progress" class="btn btn-view btn-sm">
-                                        <i class="fas fa-eye" aria-hidden="true"></i>
-                                    </a>
+    </div>
 
-                                    <!-- Edit Button -->
-                                    <a href="{{ url('/lesson-progress/' . $item->id . '/edit') }}" title="Edit Progress" class="btn btn-edit btn-sm">
-                                        <i class="fas fa-edit" aria-hidden="true"></i>
-                                    </a>
-
-                                    <!-- Toggle Completion Button -->
-                                    <button type="button" class="btn btn-toggle btn-sm" 
-                                            title="{{ $item->completed ? 'Mark as Incomplete' : 'Mark as Complete' }}"
-                                            onclick="toggleCompletion({{ $item->id }}, {{ $item->completed ? 'false' : 'true' }})">
-                                        <i class="fas {{ $item->completed ? 'fa-undo' : 'fa-check' }}" aria-hidden="true"></i>
-                                    </button>
-
-                                    <!-- Delete Button -->
-                                    <form method="POST" action="{{ url('/lesson-progress/' . $item->id) }}" accept-charset="UTF-8" style="display:inline">
-                                        @method('DELETE')
-                                        @csrf
-                                        <button type="submit" class="btn btn-delete btn-sm" title="Delete Progress Record" 
-                                                onclick="return confirm('Are you sure you want to delete this progress record?')">
-                                            <i class="fas fa-trash" aria-hidden="true"></i>
-                                        </button>
-                                    </form>
-                                </div>
-                            </td>
-                        </tr>
-                    @endforeach
-                </tbody>
-            </table>
+    {{-- Filter Bar --}}
+    <div class="card mb-4">
+        <div class="card-body">
+            <form method="GET" action="{{ route('lesson-progress.index') }}" class="row g-3">
+                <div class="col-md-3">
+                    <label class="form-label">User</label>
+                    <select name="user_id" class="form-select">
+                        <option value="">All Users</option>
+                        @foreach($users as $user)
+                            <option value="{{ $user->id }}" @selected(request('user_id') == $user->id)>
+                                {{ $user->name }}
+                            </option>
+                        @endforeach
+                    </select>
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label">Lesson</label>
+                    <select name="lesson_id" class="form-select">
+                        <option value="">All Lessons</option>
+                        @foreach($lessons as $lesson)
+                            <option value="{{ $lesson->id }}" @selected(request('lesson_id') == $lesson->id)>
+                                {{ $lesson->title }} ({{ $lesson->course->title ?? 'No Course' }})
+                            </option>
+                        @endforeach
+                    </select>
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label">Status</label>
+                    <select name="status" class="form-select">
+                        <option value="">All</option>
+                        <option value="completed" @selected(request('status') == 'completed')>Completed</option>
+                        <option value="incomplete" @selected(request('status') == 'incomplete')>In Progress</option>
+                    </select>
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label">Search</label>
+                    <input type="text" name="search" class="form-control" 
+                           placeholder="User name, email, lesson..." 
+                           value="{{ request('search') }}">
+                </div>
+                <div class="col-md-1 d-flex align-items-end">
+                    <button type="submit" class="btn btn-primary w-100">
+                        <i class="fas fa-filter"></i>
+                    </button>
+                    <a href="{{ route('lesson-progress.index') }}" class="btn btn-secondary ms-2">
+                        <i class="fas fa-times"></i>
+                    </a>
+                </div>
+            </form>
         </div>
-        
-        <!-- Pagination - Only show if pagination is available -->
-        @if(method_exists($lessonProgresses, 'hasPages') && $lessonProgresses->hasPages())
-            <div class="d-flex justify-content-center mt-4">
-                {{ $lessonProgresses->withQueryString()->links() }}
+    </div>
+
+    {{-- Progress Table --}}
+    <div class="card">
+        <div class="card-body">
+            <div class="table-responsive">
+                <table class="table table-hover">
+                    <thead>
+                        <tr>
+                            <th width="30">
+                                <input type="checkbox" id="selectAll">
+                            </th>
+                            <th>User</th>
+                            <th>Lesson</th>
+                            <th>Course</th>
+                            <th>Status</th>
+                            <th>Completed At</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @forelse($lessonProgresses as $progress)
+                            <tr>
+                                <td>
+                                    <input type="checkbox" class="select-item" value="{{ $progress->id }}">
+                                </td>
+                                <td>
+                                    <a href="{{ route('users.show', $progress->user_id) }}" class="text-decoration-none">
+                                        <strong>{{ $progress->user->name }}</strong>
+                                        <br>
+                                        <small>{{ $progress->user->email }}</small>
+                                    </a>
+                                </td>
+                                <td>
+                                    <a href="{{ route('lessons.show', $progress->lesson_id) }}" class="text-decoration-none">
+                                        {{ $progress->lesson->title }}
+                                    </a>
+                                </td>
+                                <td>
+                                    @if($progress->lesson->course)
+                                        <a href="{{ route('courses.show', $progress->lesson->course_id) }}" class="text-decoration-none">
+                                            {{ $progress->lesson->course->title }}
+                                        </a>
+                                    @else
+                                        <span class="text-muted">No Course</span>
+                                    @endif
+                                </td>
+                                <td>
+                                    @if($progress->completed)
+                                        <span class="badge bg-success">Completed</span>
+                                    @else
+                                        <span class="badge bg-warning">In Progress</span>
+                                    @endif
+                                </td>
+                                <td>
+                                    @if($progress->completed_at)
+                                        {{ $progress->completed_at->format('M d, Y H:i') }}
+                                        <br>
+                                        <small class="text-muted">{{ $progress->completed_at->diffForHumans() }}</small>
+                                    @else
+                                        <span class="text-muted">—</span>
+                                    @endif
+                                </td>
+                                <td>
+                                    <div class="btn-group" role="group">
+                                        <a href="{{ route('lesson-progress.show', $progress->id) }}" 
+                                           class="btn btn-sm btn-info" title="View">
+                                            <i class="fas fa-eye"></i>
+                                        </a>
+                                        <a href="{{ route('lesson-progress.edit', $progress->id) }}" 
+                                           class="btn btn-sm btn-warning" title="Edit">
+                                            <i class="fas fa-edit"></i>
+                                        </a>
+                                        <button type="button" class="btn btn-sm btn-success toggle-complete" 
+                                                data-id="{{ $progress->id }}"
+                                                data-completed="{{ $progress->completed }}"
+                                                title="Toggle Status">
+                                            <i class="fas fa-check-circle"></i>
+                                        </button>
+                                        <button type="button" class="btn btn-sm btn-danger delete-progress" 
+                                                data-id="{{ $progress->id }}"
+                                                title="Delete">
+                                            <i class="fas fa-trash"></i>
+                                        </button>
+                                    </div>
+                                </td>
+                            </tr>
+                        @empty
+                            <tr>
+                                <td colspan="7" class="text-center py-4">
+                                    <i class="fas fa-book-open fa-3x text-muted mb-3"></i>
+                                    <h5>No Progress Records Found</h5>
+                                    <p class="text-muted">Start by adding a new lesson progress.</p>
+                                    <a href="{{ route('lesson-progress.create') }}" class="btn btn-primary">
+                                        Add Progress
+                                    </a>
+                                </td>
+                            </tr>
+                        @endforelse
+                    </tbody>
+                </table>
             </div>
-        @endif
-        
-        <!-- No Progress Records Message -->
-        @if($lessonProgresses->isEmpty())
-            <div class="text-center py-5">
-                <i class="fas fa-chart-line fa-3x text-muted mb-3"></i>
-                <h4 class="text-muted">No progress records found</h4>
-                <p class="text-muted">Track user progress through lessons here</p>
-                <a href="{{ url('/lesson-progress/create') }}" class="btn btn-add-progress">
-                    <i class="fas fa-plus-circle" aria-hidden="true"></i> Create Progress Record
-                </a>
+
+            {{-- Pagination --}}
+            <div class="d-flex justify-content-between align-items-center mt-3">
+                <div>
+                    Showing {{ $lessonProgresses->firstItem() ?? 0 }} to {{ $lessonProgresses->lastItem() ?? 0 }} 
+                    of {{ $lessonProgresses->total() }} records
+                </div>
+                <div>
+                    {{ $lessonProgresses->links() }}
+                </div>
             </div>
-        @endif
-        
-        <!-- Bulk Actions -->
-        @if($lessonProgresses->isNotEmpty())
-        <div class="card mt-4">
-            <div class="card-header bg-light">
-                <h5 class="mb-0"><i class="fas fa-tasks"></i> Bulk Actions</h5>
-            </div>
-            <div class="card-body">
-                <div class="row">
-                    <div class="col-md-4">
-                        <div class="mb-3">
-                            <label class="form-label">Mark Selected as Complete</label>
-                            <div class="input-group">
-                                <input type="text" id="bulkCompleteIds" class="form-control" placeholder="Enter IDs (comma-separated)">
-                                <button class="btn btn-success" type="button" onclick="bulkComplete()">
-                                    <i class="fas fa-check"></i> Complete
-                                </button>
-                            </div>
-                            <small class="form-text text-muted">Enter progress record IDs separated by commas</small>
-                        </div>
-                    </div>
-                    <div class="col-md-4">
-                        <div class="mb-3">
-                            <label class="form-label">Export Progress Data</label>
-                            <div>
-                                <a href="{{ url('/lesson-progress/export/csv') }}" class="btn btn-outline-primary me-2">
-                                    <i class="fas fa-file-csv"></i> Export CSV
-                                </a>
-                                <a href="{{ url('/lesson-progress/export/pdf') }}" class="btn btn-outline-danger">
-                                    <i class="fas fa-file-pdf"></i> Export PDF
-                                </a>
-                            </div>
-                        </div>
-                    </div>
-                    <div class="col-md-4">
-                        <div class="mb-3">
-                            <label class="form-label">Quick Stats</label>
-                            <div class="small">
-                                <p class="mb-1"><strong>Total Records:</strong> {{ $lessonProgressesCount ?? 0 }}</p>
-                                <p class="mb-1"><strong>Completed:</strong> {{ $completedCount ?? 0 }}</p>
-                                <p class="mb-1"><strong>In Progress:</strong> {{ ($lessonProgressesCount ?? 0) - ($completedCount ?? 0) }}</p>
-                            </div>
-                        </div>
+
+            {{-- Bulk Actions --}}
+            <div class="mt-3" id="bulkActions" style="display: none;">
+                <div class="alert alert-info">
+                    <strong><span id="selectedCount">0</span> records selected</strong>
+                    <div class="mt-2">
+                        <button class="btn btn-success btn-sm" onclick="bulkComplete()">
+                            <i class="fas fa-check-circle"></i> Mark Complete
+                        </button>
+                        <button class="btn btn-danger btn-sm" onclick="bulkDelete()">
+                            <i class="fas fa-trash"></i> Delete Selected
+                        </button>
                     </div>
                 </div>
             </div>
         </div>
-        @endif
     </div>
 </div>
-
-<!-- CSS Styling -->
-<style>
-    /* General Styles */
-    .card {
-        border: none;
-        box-shadow: 0 8px 30px rgba(0, 0, 0, 0.1);
-        border-radius: 15px;
-        overflow: hidden;
-    }
-    
-    .card-header {
-        background: linear-gradient(145deg, #9b59b6, #8e44ad);
-        color: white;
-        padding: 20px 30px;
-        border-bottom: none;
-    }
-    
-    .card-header h2 {
-        margin: 0;
-        font-weight: 600;
-        font-size: 1.8rem;
-    }
-    
-    .card-body {
-        padding: 30px;
-    }
-
-    /* Button Styles */
-    .btn {
-        font-size: 14px;
-        padding: 10px 20px;
-        margin: 5px;
-        border-radius: 8px;
-        font-weight: 500;
-        cursor: pointer;
-        border: none;
-        outline: none;
-        transition: all 0.3s ease-in-out;
-        display: inline-flex;
-        align-items: center;
-        justify-content: center;
-        text-transform: capitalize;
-    }
-
-    .btn-sm {
-        padding: 6px 10px;
-        font-size: 12px;
-        min-width: 36px;
-    }
-
-    .btn-group .btn {
-        margin: 0 2px;
-        border-radius: 6px;
-    }
-
-    /* Add New Progress Button */
-    .btn-add-progress {
-        background: linear-gradient(145deg, #9b59b6, #8e44ad);
-        color: white;
-        font-weight: 600;
-        padding: 12px 25px;
-    }
-
-    .btn-add-progress:hover {
-        background: linear-gradient(145deg, #8e44ad, #7d3c98);
-        transform: translateY(-3px);
-        box-shadow: 0 6px 15px rgba(155, 89, 182, 0.4);
-        color: white;
-    }
-
-    /* Action Buttons */
-    .btn-view {
-        background-color: #3498db;
-        color: white;
-    }
-
-    .btn-view:hover {
-        background-color: #2980b9;
-        transform: translateY(-2px);
-        box-shadow: 0 4px 8px rgba(52, 152, 219, 0.3);
-    }
-
-    .btn-edit {
-        background-color: #f39c12;
-        color: white;
-    }
-
-    .btn-edit:hover {
-        background-color: #e67e22;
-        transform: translateY(-2px);
-        box-shadow: 0 4px 8px rgba(243, 156, 18, 0.3);
-    }
-
-    .btn-toggle {
-        background-color: #2ecc71;
-        color: white;
-    }
-
-    .btn-toggle:hover {
-        background-color: #27ae60;
-        transform: translateY(-2px);
-        box-shadow: 0 4px 8px rgba(46, 204, 113, 0.3);
-    }
-
-    .btn-delete {
-        background-color: #dc3545;
-        color: white;
-    }
-
-    .btn-delete:hover {
-        background-color: #c82333;
-        transform: translateY(-2px);
-        box-shadow: 0 4px 8px rgba(220, 53, 69, 0.3);
-    }
-
-    /* Table Styling */
-    .table {
-        width: 100%;
-        margin-bottom: 1rem;
-        background-color: white;
-        border-radius: 10px;
-        overflow: hidden;
-        border-collapse: separate;
-        border-spacing: 0;
-    }
-
-    .table-striped tbody tr:nth-child(odd) {
-        background-color: #f8f9fa;
-    }
-
-    .table-hover tbody tr:hover {
-        background-color: #f5e6ff;
-        transform: scale(1.01);
-        transition: all 0.2s ease;
-    }
-
-    .table th {
-        background: linear-gradient(145deg, #9b59b6, #8e44ad);
-        color: white;
-        padding: 15px;
-        font-weight: 600;
-        text-transform: uppercase;
-        font-size: 13px;
-        letter-spacing: 0.5px;
-        border: none;
-    }
-
-    .table td {
-        padding: 15px;
-        text-align: left;
-        font-size: 14px;
-        color: #444;
-        border-bottom: 1px solid #e9ecef;
-        vertical-align: middle;
-    }
-
-    .table-responsive {
-        overflow-x: auto;
-        border-radius: 10px;
-    }
-
-    /* Statistics Cards */
-    .stat-card {
-        border-radius: 10px;
-        transition: all 0.3s ease;
-    }
-
-    .stat-card:hover {
-        transform: translateY(-5px);
-        box-shadow: 0 10px 20px rgba(0, 0, 0, 0.1);
-    }
-
-    /* Badge Styling */
-    .badge {
-        padding: 6px 12px;
-        border-radius: 20px;
-        font-weight: 500;
-        font-size: 12px;
-    }
-
-    /* User, Lesson, Course Icons */
-    .user-avatar, .lesson-icon, .course-icon {
-        width: 40px;
-        text-align: center;
-    }
-
-    .completion-date {
-        min-width: 100px;
-    }
-
-    .status-badge {
-        display: flex;
-        flex-direction: column;
-        align-items: flex-start;
-    }
-
-    /* Filters */
-    .form-select-sm {
-        width: 150px;
-        border-radius: 6px;
-        border: 1px solid #ced4da;
-    }
-
-    /* Bulk Actions */
-    #bulkCompleteIds {
-        border-radius: 6px 0 0 6px;
-    }
-
-    /* Pagination */
-    .pagination {
-        margin-bottom: 0;
-    }
-
-    .page-link {
-        color: #9b59b6;
-        border: 1px solid #dee2e6;
-        margin: 0 3px;
-        border-radius: 6px;
-    }
-
-    .page-item.active .page-link {
-        background: linear-gradient(145deg, #9b59b6, #8e44ad);
-        border-color: #9b59b6;
-        color: white;
-    }
-
-    .page-link:hover {
-        color: #8e44ad;
-        background-color: #e9ecef;
-        border-color: #dee2e6;
-    }
-
-    /* Empty State */
-    .fa-3x {
-        font-size: 4rem;
-    }
-
-    /* Progress Animation */
-    @keyframes pulse {
-        0% { transform: scale(1); }
-        50% { transform: scale(1.05); }
-        100% { transform: scale(1); }
-    }
-
-    .pulse {
-        animation: pulse 2s infinite;
-    }
-</style>
-
-<!-- JavaScript for Enhanced Functionality -->
-<script>
-    document.addEventListener('DOMContentLoaded', function() {
-        // Initialize tooltips
-        const tooltipTriggerList = [].slice.call(document.querySelectorAll('[title]'));
-        tooltipTriggerList.map(function (tooltipTriggerEl) {
-            return new bootstrap.Tooltip(tooltipTriggerEl);
-        });
-        
-        // Confirm before deleting
-        const deleteForms = document.querySelectorAll('form[action*="/lesson-progress/"]');
-        
-        deleteForms.forEach(form => {
-            if (form.method === 'post') {
-                form.addEventListener('submit', function(e) {
-                    const confirmDelete = confirm('Are you sure you want to delete this progress record?');
-                    if (!confirmDelete) {
-                        e.preventDefault();
-                    }
-                });
-            }
-        });
-        
-        // Add hover effect to table rows
-        const tableRows = document.querySelectorAll('.table tbody tr');
-        tableRows.forEach(row => {
-            row.addEventListener('mouseenter', function() {
-                this.style.transition = 'all 0.2s ease';
-            });
-        });
-        
-        // Status badge animation
-        const statusBadges = document.querySelectorAll('.status-badge');
-        statusBadges.forEach(badge => {
-            if (badge.querySelector('.bg-success')) {
-                badge.addEventListener('mouseenter', function() {
-                    const icon = this.querySelector('i');
-                    if (icon) {
-                        icon.classList.add('pulse');
-                    }
-                });
-                
-                badge.addEventListener('mouseleave', function() {
-                    const icon = this.querySelector('i');
-                    if (icon) {
-                        icon.classList.remove('pulse');
-                    }
-                });
-            }
-        });
-        
-        // Completion date hover effect
-        const completionDates = document.querySelectorAll('.completion-date');
-        completionDates.forEach(date => {
-            date.addEventListener('mouseenter', function() {
-                this.style.transform = 'translateX(5px)';
-                this.style.transition = 'transform 0.3s ease';
-            });
-            
-            date.addEventListener('mouseleave', function() {
-                this.style.transform = 'translateX(0)';
-            });
-        });
-    });
-    
-    // Filter functions
-    function filterByStatus(status) {
-        document.getElementById('searchStatus').value = status;
-        const form = document.getElementById('searchStatus').closest('form');
-        form.submit();
-    }
-    
-    function filterByUser(userId) {
-        document.getElementById('searchUserId').value = userId;
-        const form = document.getElementById('searchUserId').closest('form');
-        form.submit();
-    }
-    
-    function filterByLesson(lessonId) {
-        document.getElementById('searchLessonId').value = lessonId;
-        const form = document.getElementById('searchLessonId').closest('form');
-        form.submit();
-    }
-    
-    // Toggle completion status
-    function toggleCompletion(progressId, markAsComplete) {
-        if (!progressId) return;
-        
-        const button = event.target.closest('button');
-        const originalHtml = button.innerHTML;
-        const originalTitle = button.title;
-        
-        button.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
-        button.disabled = true;
-        button.title = 'Updating...';
-        
-        fetch(`/lesson-progress/${progressId}/toggle`, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'X-CSRF-TOKEN': '{{ csrf_token() }}',
-                'Accept': 'application/json'
-            },
-            body: JSON.stringify({
-                completed: markAsComplete
-            })
-        })
-        .then(response => response.json())
-        .then(data => {
-            if (data.success) {
-                // Reload page to show updated status
-                window.location.reload();
-            } else {
-                alert(data.message || 'Failed to update progress');
-                button.innerHTML = originalHtml;
-                button.disabled = false;
-                button.title = originalTitle;
-            }
-        })
-        .catch(error => {
-            console.error('Error:', error);
-            alert('An error occurred while updating progress');
-            button.innerHTML = originalHtml;
-            button.disabled = false;
-            button.title = originalTitle;
-        });
-    }
-    
-    // Bulk complete progress records
-    function bulkComplete() {
-        const idsInput = document.getElementById('bulkCompleteIds');
-        const ids = idsInput.value.trim();
-        
-        if (!ids) {
-            alert('Please enter progress record IDs');
-            return;
-        }
-        
-        // Validate IDs format
-        const idArray = ids.split(',').map(id => id.trim()).filter(id => id);
-        if (idArray.length === 0) {
-            alert('Please enter valid IDs');
-            return;
-        }
-        
-        if (!confirm(`Mark ${idArray.length} record(s) as complete?`)) {
-            return;
-        }
-        
-        const button = event.target.closest('button');
-        const originalHtml = button.innerHTML;
-        
-        button.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Processing...';
-        button.disabled = true;
-        
-        fetch('/lesson-progress/bulk-complete', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'X-CSRF-TOKEN': '{{ csrf_token() }}',
-                'Accept': 'application/json'
-            },
-            body: JSON.stringify({
-                ids: idArray
-            })
-        })
-        .then(response => response.json())
-        .then(data => {
-            if (data.success) {
-                alert(`Successfully marked ${data.updated} record(s) as complete`);
-                window.location.reload();
-            } else {
-                alert(data.message || 'Failed to update records');
-                button.innerHTML = originalHtml;
-                button.disabled = false;
-            }
-        })
-        .catch(error => {
-            console.error('Error:', error);
-            alert('An error occurred while processing bulk update');
-            button.innerHTML = originalHtml;
-            button.disabled = false;
-        });
-    }
-    
-    // Export functionality
-    function exportData(format) {
-        const params = new URLSearchParams(window.location.search);
-        params.set('format', format);
-        
-        window.location.href = `/lesson-progress/export?${params.toString()}`;
-    }
-    
-    // Quick stats update
-    function updateQuickStats() {
-        // This would typically make an AJAX call to get updated stats
-        // For now, we'll just show a loading indicator
-        const statsContainer = document.querySelector('.quick-stats');
-        if (statsContainer) {
-            const originalHtml = statsContainer.innerHTML;
-            statsContainer.innerHTML = '<div class="spinner-border spinner-border-sm text-primary"></div> Loading...';
-            
-            fetch('/lesson-progress/stats')
-                .then(response => response.json())
-                .then(data => {
-                    statsContainer.innerHTML = `
-                        <p class="mb-1"><strong>Total Records:</strong> ${data.total}</p>
-                        <p class="mb-1"><strong>Completed:</strong> ${data.completed}</p>
-                        <p class="mb-1"><strong>In Progress:</strong> ${data.in_progress}</p>
-                    `;
-                })
-                .catch(error => {
-                    console.error('Error:', error);
-                    statsContainer.innerHTML = originalHtml;
-                });
-        }
-    }
-    
-    // Auto-refresh stats every 30 seconds
-    setInterval(updateQuickStats, 30000);
-    
-    // Keyboard shortcuts
-    document.addEventListener('keydown', function(e) {
-        // Ctrl/Cmd + F to focus search
-        if ((e.ctrlKey || e.metaKey) && e.key === 'f') {
-            e.preventDefault();
-            document.querySelector('input[name="search"]').focus();
-        }
-        
-        // Ctrl/Cmd + N to add new progress
-        if ((e.ctrlKey || e.metaKey) && e.key === 'n') {
-            e.preventDefault();
-            window.location.href = '/lesson-progress/create';
-        }
-    });
-</script>
-
 @endsection
+
+@push('scripts')
+<script>
+    // ========== STATE MANAGEMENT ==========
+    let selectedIds = new Set();
+    let isLoading = false;
+
+    // Show/hide loading overlay
+    function setLoading(loading) {
+        isLoading = loading;
+        document.getElementById('loadingOverlay').style.display = loading ? 'flex' : 'none';
+    }
+
+    // ========== INITIALIZATION ==========
+    document.addEventListener('DOMContentLoaded', function() {
+        initializeCheckboxes();
+        initializeToggleButtons();
+        initializeDeleteButtons();
+        initializeFormSubmit();
+        highlightNewRows();
+    });
+
+    // ========== CHECKBOX FUNCTIONS ==========
+    function initializeCheckboxes() {
+        const selectAll = document.getElementById('selectAll');
+        const checkboxes = document.querySelectorAll('.select-item');
+
+        if (selectAll) {
+            selectAll.addEventListener('change', function(e) {
+                const checked = e.target.checked;
+                checkboxes.forEach(checkbox => {
+                    checkbox.checked = checked;
+                    if (checked) {
+                        selectedIds.add(checkbox.value);
+                    } else {
+                        selectedIds.delete(checkbox.value);
+                    }
+                });
+                updateBulkActions();
+            });
+        }
+
+        checkboxes.forEach(checkbox => {
+            checkbox.addEventListener('change', function(e) {
+                if (e.target.checked) {
+                    selectedIds.add(e.target.value);
+                } else {
+                    selectedIds.delete(e.target.value);
+                }
+                
+                if (selectAll) {
+                    selectAll.checked = checkboxes.length === document.querySelectorAll('.select-item:checked').length;
+                }
+                
+                updateBulkActions();
+            });
+        });
+    }
+
+    function updateBulkActions() {
+        const bulkActions = document.getElementById('bulkActions');
+        const selectedCount = document.getElementById('selectedCount');
+        const count = selectedIds.size;
+        
+        if (count > 0) {
+            selectedCount.textContent = count;
+            bulkActions.style.display = 'block';
+            bulkActions.style.animation = 'none';
+            bulkActions.offsetHeight;
+            bulkActions.style.animation = 'slideUp 0.3s ease-out';
+        } else {
+            bulkActions.style.display = 'none';
+        }
+    }
+
+    function clearSelection() {
+        selectedIds.clear();
+        document.querySelectorAll('.select-item').forEach(checkbox => {
+            checkbox.checked = false;
+        });
+        if (document.getElementById('selectAll')) {
+            document.getElementById('selectAll').checked = false;
+        }
+        updateBulkActions();
+    }
+
+    // ========== TOGGLE COMPLETION ==========
+    function initializeToggleButtons() {
+        document.querySelectorAll('.toggle-complete').forEach(button => {
+            button.addEventListener('click', async function() {
+                const id = this.dataset.id;
+                const wasCompleted = this.dataset.completed === '1';
+                const newStatus = !wasCompleted;
+                
+                if (!confirm(`Mark this lesson as ${newStatus ? 'complete' : 'incomplete'}?`)) {
+                    return;
+                }
+
+                setLoading(true);
+
+                try {
+                    const response = await fetch(`/lesson-progress/${id}/toggle`, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content
+                        },
+                        body: JSON.stringify({ completed: newStatus })
+                    });
+
+                    const data = await response.json();
+                    
+                    if (data.success) {
+                        showNotification('Status updated successfully!', 'success');
+                        setTimeout(() => location.reload(), 1000);
+                    } else {
+                        throw new Error(data.message || 'Failed to update status');
+                    }
+                } catch (error) {
+                    console.error('Error:', error);
+                    showNotification('Failed to update status. Please try again.', 'error');
+                } finally {
+                    setLoading(false);
+                }
+            });
+        });
+    }
+
+    // ========== DELETE SINGLE ==========
+    function initializeDeleteButtons() {
+        document.querySelectorAll('.delete-progress').forEach(button => {
+            button.addEventListener('click', async function() {
+                const id = this.dataset.id;
+                
+                if (!confirm('Are you sure you want to delete this progress record? This action cannot be undone.')) {
+                    return;
+                }
+
+                setLoading(true);
+
+                try {
+                    const response = await fetch(`/lesson-progress/${id}`, {
+                        method: 'DELETE',
+                        headers: {
+                            'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content
+                        }
+                    });
+
+                    if (response.ok) {
+                        showNotification('Progress record deleted successfully!', 'success');
+                        setTimeout(() => location.reload(), 500);
+                    } else {
+                        throw new Error('Failed to delete');
+                    }
+                } catch (error) {
+                    console.error('Error:', error);
+                    showNotification('Failed to delete record. Please try again.', 'error');
+                } finally {
+                    setLoading(false);
+                }
+            });
+        });
+    }
+
+    // ========== BULK ACTIONS ==========
+    async function bulkComplete() {
+        const ids = Array.from(selectedIds);
+        
+        if (ids.length === 0) return;
+        
+        if (!confirm(`Mark ${ids.length} selected records as complete?`)) {
+            return;
+        }
+
+        setLoading(true);
+
+        try {
+            const response = await fetch('{{ route("lesson-progress.bulk-complete") }}', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content
+                },
+                body: JSON.stringify({ ids: ids })
+            });
+
+            const data = await response.json();
+            
+            if (data.success) {
+                showNotification(`${data.updated || ids.length} records marked as complete!`, 'success');
+                setTimeout(() => location.reload(), 1000);
+            } else {
+                throw new Error(data.message || 'Failed to complete records');
+            }
+        } catch (error) {
+            console.error('Error:', error);
+            showNotification('Failed to complete records. Please try again.', 'error');
+        } finally {
+            setLoading(false);
+        }
+    }
+
+    async function bulkDelete() {
+        const ids = Array.from(selectedIds);
+        
+        if (ids.length === 0) return;
+        
+        if (!confirm(`Are you sure you want to delete ${ids.length} records? This action cannot be undone.`)) {
+            return;
+        }
+
+        setLoading(true);
+
+        try {
+            const response = await fetch('{{ route("lesson-progress.bulk-delete") }}', {
+                method: 'DELETE',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content
+                },
+                body: JSON.stringify({ ids: ids })
+            });
+
+            const data = await response.json();
+            
+            if (data.success) {
+                showNotification(`${data.deleted || ids.length} records deleted successfully!`, 'success');
+                setTimeout(() => location.reload(), 1000);
+            } else {
+                throw new Error(data.message || 'Failed to delete records');
+            }
+        } catch (error) {
+            console.error('Error:', error);
+            showNotification('Failed to delete records. Please try again.', 'error');
+        } finally {
+            setLoading(false);
+        }
+    }
+
+    // ========== EXPORT ==========
+    async function exportProgress() {
+        const params = new URLSearchParams(window.location.search);
+        const exportUrl = `{{ route("lesson-progress.export") }}?${params.toString()}`;
+        
+        setLoading(true);
+        
+        try {
+            window.location.href = exportUrl;
+            showNotification('Export started. Your download will begin shortly.', 'info');
+        } catch (error) {
+            console.error('Error:', error);
+            showNotification('Failed to start export. Please try again.', 'error');
+        } finally {
+            setTimeout(() => setLoading(false), 2000);
+        }
+    }
+
+    // ========== FORM SUBMIT ==========
+    function initializeFormSubmit() {
+        const filterForm = document.getElementById('filterForm');
+        if (filterForm) {
+            filterForm.addEventListener('submit', function() {
+                setLoading(true);
+            });
+        }
+    }
+
+    // ========== HIGHLIGHT NEW ROWS ==========
+    function highlightNewRows() {
+        const urlParams = new URLSearchParams(window.location.search);
+        if (urlParams.get('new') === 'true') {
+            const firstRow = document.querySelector('tbody tr:first-child');
+            if (firstRow) {
+                firstRow.classList.add('highlight-new');
+            }
+        }
+    }
+
+    // ========== NOTIFICATION SYSTEM ==========
+    function showNotification(message, type = 'info') {
+        const notification = document.createElement('div');
+        notification.className = `notification-toast alert alert-${type}`;
+        
+        const icon = type === 'success' ? 'check-circle' : 
+                    type === 'error' ? 'exclamation-circle' : 'info-circle';
+        
+        notification.innerHTML = `
+            <div class="d-flex align-items-center">
+                <i class="fas fa-${icon} me-2 fa-lg"></i>
+                <div>${message}</div>
+                <button class="btn-close ms-auto" onclick="this.parentElement.parentElement.remove()"></button>
+            </div>
+        `;
+        
+        document.body.appendChild(notification);
+        
+        setTimeout(() => {
+            notification.style.animation = 'slideOutRight 0.3s ease';
+            setTimeout(() => notification.remove(), 300);
+        }, 5000);
+    }
+</script>
+@endpush
