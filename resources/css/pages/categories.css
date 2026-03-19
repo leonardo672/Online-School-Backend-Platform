@@ -1,0 +1,1023 @@
+/* ========================================
+   Categories Management Styles
+   Includes: Index, Create, Edit, Show pages
+   ======================================== */
+
+/* ----------------------------------------
+   Global Category Styles
+   ---------------------------------------- */
+
+/* Card Styling */
+.card {
+    border: none;
+    box-shadow: 0 8px 30px rgba(0, 0, 0, 0.1);
+    border-radius: 15px;
+    overflow: hidden;
+    margin-bottom: 20px;
+}
+
+.card-header {
+    background: linear-gradient(145deg, #2ecc71, #27ae60);
+    color: white;
+    padding: 20px 30px;
+    border-bottom: none;
+}
+
+.card-header h2 {
+    margin: 0;
+    font-weight: 600;
+    font-size: 1.8rem;
+}
+
+.card-header h4 {
+    margin: 0;
+    font-weight: 600;
+    font-size: 1.5rem;
+}
+
+.card-header h5 {
+    margin: 0;
+    font-weight: 600;
+}
+
+.card-body {
+    padding: 30px;
+}
+
+/* Category Card (for create/edit pages) */
+.category-card {
+  border: none;
+  box-shadow: 0 4px 20px rgba(0,0,0,0.1);
+  border-radius: 12px;
+  overflow: hidden;
+  max-width: 800px;
+  margin: 0 auto;
+}
+
+.category-card .card-header {
+  background: linear-gradient(145deg, #2ecc71, #27ae60);
+  color: white;
+  padding: 20px;
+}
+
+.category-card .card-header h4 {
+  margin: 0;
+  font-weight: 600;
+}
+
+.category-card .card-header i {
+  margin-right: 8px;
+}
+
+/* ----------------------------------------
+   Show Page Specific Styles
+   ---------------------------------------- */
+
+/* Category Details Section */
+.category-details {
+    background: #f8f9fa;
+    border-radius: 15px;
+    padding: 20px;
+    border: 1px solid #e9ecef;
+}
+
+.category-details strong i {
+    width: 20px;
+    margin-right: 10px;
+    color: #2ecc71;
+}
+
+.bg-light {
+    background-color: #f8f9fa !important;
+}
+
+.rounded {
+    border-radius: 10px !important;
+}
+
+/* Stats Cards - Show Page */
+.stats-card {
+    transition: all 0.3s ease;
+}
+
+.stats-card:hover {
+    transform: translateY(-5px);
+    box-shadow: 0 10px 20px rgba(0, 0, 0, 0.15);
+}
+
+.stats-card .bg-success {
+    background: linear-gradient(135deg, #2ecc71, #27ae60) !important;
+}
+
+.stats-card .bg-primary {
+    background: linear-gradient(135deg, #3498db, #2980b9) !important;
+}
+
+.stats-card .bg-warning {
+    background: linear-gradient(135deg, #f39c12, #e67e22) !important;
+}
+
+.stats-card .bg-info {
+    background: linear-gradient(135deg, #00bcd4, #0097a7) !important;
+}
+
+/* Quick Actions Section */
+.quick-actions {
+    background: #f8f9fa;
+    border-radius: 15px;
+    padding: 20px;
+    border: 1px solid #e9ecef;
+}
+
+.quick-actions .btn-outline-success {
+    border: 2px solid #2ecc71;
+    color: #2ecc71;
+    background: transparent;
+}
+
+.quick-actions .btn-outline-success:hover {
+    background: linear-gradient(145deg, #2ecc71, #27ae60);
+    color: white;
+    border-color: transparent;
+}
+
+.quick-actions .btn-outline-primary {
+    border: 2px solid #3498db;
+    color: #3498db;
+    background: transparent;
+}
+
+.quick-actions .btn-outline-primary:hover {
+    background: linear-gradient(145deg, #3498db, #2980b9);
+    color: white;
+    border-color: transparent;
+}
+
+/* Courses Section - Show Page */
+.courses-section {
+    background: white;
+    border-radius: 15px;
+    padding: 20px;
+    border: 1px solid #e9ecef;
+}
+
+.courses-section .table {
+    background-color: white;
+    border-radius: 10px;
+    overflow: hidden;
+    margin-bottom: 0;
+}
+
+.courses-section .table th {
+    background-color: #f8f9fa;
+    color: #495057;
+    font-weight: 600;
+    border-bottom: 2px solid #2ecc71;
+    padding: 12px;
+}
+
+.courses-section .table td {
+    padding: 12px;
+    vertical-align: middle;
+}
+
+.courses-section .table-hover tbody tr:hover {
+    background-color: #e9f7ef;
+}
+
+/* Additional Info Section */
+.additional-info {
+    border-left: 4px solid #2ecc71;
+    padding: 20px;
+    background: #f8f9fa;
+    border-radius: 10px;
+}
+
+.additional-info h5 i {
+    margin-right: 10px;
+}
+
+/* Empty State */
+.empty-state {
+    border: 2px dashed #dee2e6;
+    padding: 40px;
+    border-radius: 15px;
+    background: #f8f9fa;
+}
+
+.empty-state i {
+    font-size: 3rem;
+    color: #adb5bd;
+}
+
+.empty-state .btn-success {
+    background: linear-gradient(145deg, #2ecc71, #27ae60);
+    color: white;
+    border: none;
+    padding: 10px 25px;
+    font-weight: 500;
+    transition: all 0.3s ease;
+}
+
+.empty-state .btn-success:hover {
+    background: linear-gradient(145deg, #27ae60, #219653);
+    transform: translateY(-2px);
+    box-shadow: 0 5px 15px rgba(46, 204, 113, 0.3);
+}
+
+/* ----------------------------------------
+   Form Elements
+   ---------------------------------------- */
+
+.form-control:focus, 
+.form-select:focus {
+    border-color: #2ecc71;
+    box-shadow: 0 0 0 0.25rem rgba(46, 204, 113, 0.25);
+}
+
+.form-control.is-invalid:focus,
+.form-select.is-invalid:focus {
+    border-color: #dc3545;
+    box-shadow: 0 0 0 0.25rem rgba(220, 53, 69, 0.25);
+}
+
+.form-control-color {
+    height: 45px;
+    width: 70px;
+    padding: 5px;
+    border-radius: 8px;
+    cursor: pointer;
+}
+
+.form-label {
+    font-weight: 600;
+    color: #495057;
+    margin-bottom: 8px;
+}
+
+.form-text {
+    color: #6c757d;
+    font-size: 0.875rem;
+    margin-top: 4px;
+}
+
+/* ----------------------------------------
+   Button Styles
+   ---------------------------------------- */
+
+.btn {
+    border-radius: 8px;
+    font-weight: 500;
+    padding: 10px 20px;
+    transition: all 0.3s ease;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border: none;
+}
+
+.btn-sm {
+    padding: 6px 12px;
+    font-size: 14px;
+}
+
+.btn i {
+    margin-right: 8px;
+}
+
+/* Edit Button (Show Page) */
+.btn-edit {
+    background: linear-gradient(145deg, #fd7e14, #e8650f);
+    color: white;
+    border: none;
+}
+
+.btn-edit:hover {
+    background: linear-gradient(145deg, #e8650f, #c0550d);
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(253, 126, 20, 0.3);
+    color: white;
+}
+
+/* View Button */
+.btn-view {
+    background-color: #3498db;
+    color: white;
+    border: none;
+}
+
+.btn-view:hover {
+    background-color: #2980b9;
+    transform: translateY(-2px);
+    box-shadow: 0 4px 8px rgba(52, 152, 219, 0.3);
+    color: white;
+}
+
+/* Custom Button (Create/Edit) */
+.btn-custom {
+    background: linear-gradient(145deg, #2ecc71, #27ae60);
+    color: white;
+    border: none;
+    padding: 10px 25px;
+    border-radius: 8px;
+    font-weight: 500;
+    transition: all 0.3s ease;
+}
+
+.btn-custom:hover {
+    background: linear-gradient(145deg, #27ae60, #219653);
+    transform: translateY(-2px);
+    box-shadow: 0 5px 15px rgba(46, 204, 113, 0.3);
+    color: white;
+}
+
+/* Secondary Button */
+.btn-secondary {
+    background: linear-gradient(145deg, #6c757d, #495057);
+    color: white;
+    border: none;
+}
+
+.btn-secondary:hover {
+    background: linear-gradient(145deg, #495057, #343a40);
+    color: white;
+    transform: translateY(-2px);
+    box-shadow: 0 5px 15px rgba(108, 117, 125, 0.3);
+}
+
+/* Add New Category Button */
+.btn-add-category {
+    background: linear-gradient(145deg, #2ecc71, #27ae60);
+    color: white;
+    font-weight: 600;
+    padding: 12px 25px;
+}
+
+.btn-add-category:hover {
+    background: linear-gradient(145deg, #27ae60, #219653);
+    transform: translateY(-3px);
+    box-shadow: 0 6px 15px rgba(46, 204, 113, 0.4);
+    color: white;
+}
+
+/* Action Buttons (Index page) */
+.btn-action {
+  width: 35px;
+  height: 35px;
+  border-radius: 8px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  margin: 0 3px;
+  transition: all 0.3s ease;
+}
+
+.btn-action:hover {
+  transform: translateY(-2px);
+}
+
+.btn-action.edit {
+  background: #e3f2fd;
+  color: #1976d2;
+}
+
+.btn-action.edit:hover {
+  background: #1976d2;
+  color: white;
+}
+
+.btn-action.delete {
+  background: #ffebee;
+  color: #c62828;
+}
+
+.btn-action.delete:hover {
+  background: #c62828;
+  color: white;
+}
+
+.btn-action.view {
+  background: #e8f5e9;
+  color: #2e7d32;
+}
+
+.btn-action.view:hover {
+  background: #2e7d32;
+  color: white;
+}
+
+/* Category Form Buttons */
+.btn-category {
+  background: linear-gradient(145deg, #2ecc71, #27ae60);
+  color: white;
+  border: none;
+  padding: 10px 24px;
+  font-weight: 500;
+  transition: all 0.3s ease;
+}
+
+.btn-category:hover {
+  background: linear-gradient(145deg, #27ae60, #229954);
+  color: white;
+  transform: translateY(-2px);
+  box-shadow: 0 5px 15px rgba(46, 204, 113, 0.3);
+}
+
+.btn-category-outline {
+  background: transparent;
+  border: 2px solid #2ecc71;
+  color: #2ecc71;
+  padding: 8px 20px;
+  border-radius: 8px;
+  font-weight: 500;
+  transition: all 0.3s ease;
+}
+
+.btn-category-outline:hover {
+  background: #2ecc71;
+  color: white;
+}
+
+/* Print Button */
+.btn-print {
+    background: linear-gradient(145deg, #2ecc71, #27ae60);
+    color: white;
+    border: none;
+    padding: 12px 30px;
+    border-radius: 8px;
+    font-weight: 500;
+    transition: all 0.3s ease;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.btn-print:hover {
+    background: linear-gradient(145deg, #27ae60, #219653);
+    transform: translateY(-2px);
+    box-shadow: 0 5px 15px rgba(46, 204, 113, 0.3);
+    color: white;
+}
+
+.btn-print i {
+    margin-right: 8px;
+}
+
+/* ----------------------------------------
+   Icon Preview (for Create/Edit)
+   ---------------------------------------- */
+
+.icon-preview {
+    border: 2px dashed #dee2e6;
+    border-radius: 8px;
+    background: #f8f9fa;
+    min-height: 100px;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    transition: all 0.3s ease;
+}
+
+.icon-preview i {
+    font-size: 2.5rem;
+    margin-bottom: 8px;
+}
+
+.icon-preview .small {
+    margin: 0;
+    color: #6c757d;
+}
+
+/* ----------------------------------------
+   Badge Styling
+   ---------------------------------------- */
+
+.badge {
+    padding: 6px 12px;
+    border-radius: 20px;
+    font-weight: 500;
+    font-size: 12px;
+    display: inline-block;
+}
+
+.badge-published {
+    background: linear-gradient(145deg, #2ecc71, #27ae60);
+    color: white;
+    padding: 5px 10px;
+    border-radius: 15px;
+    font-weight: 500;
+    font-size: 12px;
+    display: inline-block;
+}
+
+.badge-draft {
+    background: linear-gradient(145deg, #f39c12, #d35400);
+    color: white;
+    padding: 5px 10px;
+    border-radius: 15px;
+    font-weight: 500;
+    font-size: 12px;
+    display: inline-block;
+}
+
+.badge.bg-success {
+    background: linear-gradient(135deg, #2ecc71, #27ae60);
+}
+
+.badge.bg-info {
+    background: linear-gradient(135deg, #00bcd4, #0097a7);
+}
+
+.badge.bg-warning {
+    background: linear-gradient(135deg, #f39c12, #e67e22);
+}
+
+.badge.bg-danger {
+    background: linear-gradient(135deg, #e74c3c, #c0392b);
+}
+
+/* ----------------------------------------
+   Alert Styling
+   ---------------------------------------- */
+
+.alert-school {
+    border-left: 4px solid #2ecc71;
+    background-color: #f0f9f4;
+    border-radius: 4px;
+    padding: 15px 20px;
+}
+
+.alert-school strong {
+    display: block;
+    margin-bottom: 8px;
+}
+
+.alert-school ul {
+    list-style: none;
+    padding-left: 0;
+    margin-bottom: 0;
+}
+
+.alert-school li {
+    padding: 2px 0;
+    color: #155724;
+}
+
+.alert-category {
+  background: #f0f9f4;
+  border-left: 4px solid #2ecc71;
+  border-radius: 4px;
+}
+
+.alert-category ul {
+  list-style: none;
+  padding-left: 0;
+}
+
+.alert-category li {
+  padding: 4px 0;
+  color: #155724;
+}
+
+/* ----------------------------------------
+   Table Styling
+   ---------------------------------------- */
+
+.table {
+    width: 100%;
+    margin-bottom: 1rem;
+    background-color: white;
+    border-radius: 10px;
+    overflow: hidden;
+    border-collapse: separate;
+    border-spacing: 0;
+}
+
+.table-sm th, 
+.table-sm td {
+    padding: 10px;
+    vertical-align: middle;
+}
+
+.table-striped tbody tr:nth-child(odd) {
+    background-color: #f8f9fa;
+}
+
+.table-hover tbody tr:hover {
+    background-color: #e9f7ef;
+    transform: scale(1.01);
+    transition: all 0.2s ease;
+}
+
+.table th {
+    background: linear-gradient(145deg, #2ecc71, #27ae60);
+    color: white;
+    padding: 15px;
+    font-weight: 600;
+    text-transform: uppercase;
+    font-size: 13px;
+    letter-spacing: 0.5px;
+    border: none;
+}
+
+.table td {
+    padding: 15px;
+    text-align: left;
+    font-size: 14px;
+    color: #444;
+    border-bottom: 1px solid #e9ecef;
+    vertical-align: middle;
+}
+
+.table-responsive {
+    overflow-x: auto;
+    border-radius: 10px;
+}
+
+/* Categories Table */
+.categories-table {
+  background: white;
+  border-radius: 12px;
+  overflow: hidden;
+  box-shadow: 0 4px 15px rgba(0,0,0,0.05);
+}
+
+.categories-table thead {
+  background: linear-gradient(145deg, #2ecc71, #27ae60);
+  color: white;
+}
+
+.categories-table thead th {
+  font-weight: 600;
+  text-transform: uppercase;
+  font-size: 0.9rem;
+  letter-spacing: 0.5px;
+  padding: 15px;
+  border: none;
+}
+
+.categories-table tbody tr {
+  transition: all 0.3s ease;
+}
+
+.categories-table tbody tr:hover {
+  background: #f8f9fa;
+}
+
+.categories-table td {
+  padding: 15px;
+  vertical-align: middle;
+}
+
+/* ----------------------------------------
+   Category Elements
+   ---------------------------------------- */
+
+/* Category Badges */
+.category-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 6px 12px;
+  border-radius: 20px;
+  font-size: 0.9rem;
+  font-weight: 500;
+  background: #f8f9fa;
+  color: #333;
+  transition: all 0.3s ease;
+}
+
+.category-badge i {
+  margin-right: 6px;
+  font-size: 1rem;
+}
+
+.category-badge:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+}
+
+/* Category Icon */
+.category-icon {
+    font-size: 20px;
+    width: 40px;
+    text-align: center;
+}
+
+.category-icon i {
+    font-size: 1.8rem;
+}
+
+/* Color Preview */
+.color-preview {
+    width: 25px;
+    height: 25px;
+    border-radius: 4px;
+    border: 1px solid #dee2e6;
+    transition: all 0.3s ease;
+    display: inline-block;
+}
+
+.color-preview:hover {
+    transform: scale(1.1);
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+}
+
+/* Category Grid/List Items */
+.category-item {
+  background: white;
+  border-radius: 10px;
+  padding: 20px;
+  margin-bottom: 20px;
+  box-shadow: 0 2px 10px rgba(0,0,0,0.05);
+  transition: all 0.3s ease;
+  border-left: 4px solid #2ecc71;
+}
+
+.category-item:hover {
+  box-shadow: 0 5px 20px rgba(0,0,0,0.1);
+  transform: translateX(5px);
+}
+
+/* ----------------------------------------
+   Text Colors
+   ---------------------------------------- */
+
+.text-success {
+    color: #2ecc71 !important;
+}
+
+.text-primary {
+    color: #3498db !important;
+}
+
+.text-muted {
+    color: #6c757d !important;
+}
+
+.h4, .h5 {
+    font-weight: 600;
+}
+
+/* Code styling for slugs */
+code {
+    background-color: #f8f9fa;
+    padding: 2px 6px;
+    border-radius: 4px;
+    font-size: 12px;
+    color: #6c757d;
+    border: 1px solid #e9ecef;
+}
+
+/* ----------------------------------------
+   Pagination
+   ---------------------------------------- */
+
+.pagination {
+    margin-bottom: 0;
+}
+
+.page-link {
+    color: #2ecc71;
+    border: 1px solid #dee2e6;
+    margin: 0 3px;
+    border-radius: 6px;
+    padding: 8px 12px;
+}
+
+.page-item.active .page-link {
+    background: linear-gradient(145deg, #2ecc71, #27ae60);
+    border-color: #2ecc71;
+    color: white;
+}
+
+.page-link:hover {
+    color: #219653;
+    background-color: #e9ecef;
+    border-color: #dee2e6;
+}
+
+/* ----------------------------------------
+   Loading States
+   ---------------------------------------- */
+
+.btn-custom.loading,
+.btn-category.loading,
+.btn-print.loading {
+  position: relative;
+  pointer-events: none;
+  opacity: 0.7;
+}
+
+.btn-custom.loading i,
+.btn-category.loading i,
+.btn-print.loading i {
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+/* Skeleton Loading */
+.skeleton {
+  background: linear-gradient(90deg, #f0f0f0 25%, #e0e0e0 50%, #f0f0f0 75%);
+  background-size: 200% 100%;
+  animation: loading 1.5s infinite;
+}
+
+@keyframes loading {
+  0% { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+
+/* ----------------------------------------
+   Search Form
+   ---------------------------------------- */
+
+.input-group {
+    display: flex;
+    align-items: center;
+}
+
+.input-group .form-control {
+    border-top-right-radius: 0;
+    border-bottom-right-radius: 0;
+    border: 1px solid rgba(255,255,255,0.2);
+    background: rgba(255,255,255,0.9);
+}
+
+.input-group .btn-outline-light {
+    border-top-left-radius: 0;
+    border-bottom-left-radius: 0;
+    border: 1px solid rgba(255,255,255,0.2);
+    background: rgba(255,255,255,0.2);
+}
+
+.input-group .btn-outline-light:hover {
+    background: white;
+    color: #2ecc71;
+}
+
+/* ----------------------------------------
+   Responsive Design
+   ---------------------------------------- */
+
+@media (max-width: 768px) {
+    .card-header {
+        padding: 15px 20px;
+    }
+    
+    .card-header h2 {
+        font-size: 1.5rem;
+        margin-bottom: 15px;
+    }
+    
+    .card-body {
+        padding: 20px;
+    }
+    
+    .table th, .table td {
+        padding: 10px;
+        font-size: 13px;
+    }
+    
+    .btn-group {
+        display: flex;
+        flex-direction: column;
+    }
+    
+    .btn-group .btn {
+        margin: 2px 0;
+        width: 100%;
+    }
+    
+    .d-flex.justify-content-between {
+        flex-direction: column;
+        gap: 10px;
+    }
+    
+    .stats-card {
+        margin-bottom: 15px;
+    }
+    
+    .quick-actions .d-grid {
+        gap: 10px;
+    }
+    
+    .category-header-large {
+        flex-direction: column;
+        text-align: center;
+    }
+    
+    .category-details .row > div {
+        margin-bottom: 15px;
+    }
+}
+
+@media (max-width: 576px) {
+    .stat-card h3 {
+        font-size: 22px;
+    }
+    
+    .stat-card h5 {
+        font-size: 14px;
+    }
+    
+    .table th {
+        font-size: 11px;
+        padding: 8px;
+    }
+    
+    .table td {
+        font-size: 12px;
+        padding: 8px;
+    }
+    
+    .badge {
+        font-size: 10px;
+        padding: 4px 8px;
+    }
+    
+    code {
+        font-size: 10px;
+    }
+    
+    .additional-info .row > div {
+        margin-bottom: 10px;
+    }
+}
+
+/* ----------------------------------------
+   Print Styles - Show Page Specific
+   ---------------------------------------- */
+
+@media print {
+    .btn-edit,
+    .btn-print,
+    .btn-outline-success,
+    .btn-outline-primary,
+    .quick-actions .btn,
+    .btn-add-category,
+    .btn-action,
+    .btn-custom,
+    .btn-secondary {
+        display: none !important;
+    }
+    
+    .card {
+        box-shadow: none;
+        border: 1px solid #ddd;
+    }
+    
+    .card-header {
+        background: #f8f9fa !important;
+        color: black !important;
+        -webkit-print-color-adjust: exact;
+        print-color-adjust: exact;
+    }
+    
+    .badge-published,
+    .badge-draft,
+    .badge {
+        border: 1px solid #ddd;
+        background: #f8f9fa !important;
+        color: black !important;
+        -webkit-print-color-adjust: exact;
+        print-color-adjust: exact;
+    }
+    
+    .stats-card .bg-success,
+    .stats-card .bg-primary,
+    .stats-card .bg-warning,
+    .stats-card .bg-info {
+        background: #f8f9fa !important;
+        color: black !important;
+        border: 1px solid #ddd;
+        -webkit-print-color-adjust: exact;
+        print-color-adjust: exact;
+    }
+    
+    .additional-info {
+        border-left: 4px solid #2ecc71;
+        -webkit-print-color-adjust: exact;
+        print-color-adjust: exact;
+    }
+    
+    .table th {
+        background: #f8f9fa !important;
+        color: black !important;
+    }
+    
+    a, button {
+        text-decoration: none;
+        color: black;
+    }
+    
+    .color-preview {
+        border: 1px solid #000;
+    }
+}
+
+
