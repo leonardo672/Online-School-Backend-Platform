@@ -34,11 +34,19 @@ class CertificateService
 
     public function create(array $data): Certificate
     {
+        $exists = Certificate::where('user_id', $data['user_id'])
+            ->where('course_id', $data['course_id'])
+            ->first();
+
+        if ($exists) {
+            throw new \Exception('Certificate already exists for this user and course.');
+        }
+
         return Certificate::create([
             'user_id' => $data['user_id'],
             'course_id' => $data['course_id'],
             'certificate_code' => $data['certificate_code'],
-            'issued_at' => now(),
+            'issued_at' => $data['issued_at'] ?? now(),
             'expires_at' => $data['expires_at'] ?? null,
         ]);
     }
